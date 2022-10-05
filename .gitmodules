@@ -4,3 +4,6 @@
 [submodule "thirdparty/json_spirit"]
 	path = thirdparty/json_spirit
 	url = https://github.com/png85/json_spirit.git
+[submodule "thirdparty/boost"]
+	path = thirdparty/boost
+	url = https://github.com/boostorg/boost.git
