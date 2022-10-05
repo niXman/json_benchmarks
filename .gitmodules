@@ -1,3 +1,6 @@
 [submodule "thirdparty/nlohmann"]
 	path = thirdparty/nlohmann
 	url = https://github.com/nlohmann/json.git
+[submodule "thirdparty/json_spirit"]
+	path = thirdparty/json_spirit
+	url = https://github.com/cierelabs/json_spirit.git
