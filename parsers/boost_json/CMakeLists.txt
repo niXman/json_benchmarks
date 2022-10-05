@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.1)
-project(json_spirit_parser)
+project(boost_json_parser)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra")
 
 include_directories(
-    ../../thirdparty/json_spirit
     ../../thirdparty/boost
 )
 
 set(SOURCES
-    json_spirit_parser.cpp
+    boost_json_parser.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

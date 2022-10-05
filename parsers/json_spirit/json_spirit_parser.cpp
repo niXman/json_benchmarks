@@ -14,7 +14,10 @@ int main(int argc, char *argv[])
     {
         Value val;
         std::ifstream is(argv[1]);
-        return read_stream(is, val) ? 0 : 1;
+        if ( !is ) {
+            exit(1);
+        }
+        return read_stream(is, val) && val.type() != null_type ? 0 : 1;
     }
     catch (const std::exception&)
     {
