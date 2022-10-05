@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     try
     {
         Value val;
-        std::fstream is(argv[1]);
+        std::ifstream is(argv[1]);
         return read_stream(is, val) ? 0 : 1;
     }
     catch (const std::exception&)
