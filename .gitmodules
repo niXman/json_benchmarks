@@ -13,3 +13,6 @@
 [submodule "thirdparty/taojson"]
 	path = thirdparty/taojson
 	url = https://github.com/schrewe/taocpp-json.git
+[submodule "thirdparty/jsoncons"]
+	path = thirdparty/jsoncons
+	url = https://github.com/danielaparker/jsoncons.git
