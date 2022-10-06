@@ -13,7 +13,7 @@ void make_big_file(const char *filename, size_t count, size_t numIntegers, size_
     if (os.bad() || !os.is_open())
     {
         std::ostringstream os;
-        os << "Cannot open file %s" << filename;
+        os << "Cannot open file " << filename;
         throw std::runtime_error(os.str().c_str());
     }
 

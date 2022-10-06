@@ -12,7 +12,16 @@
 	url = https://github.com/Tencent/rapidjson.git
 [submodule "thirdparty/taojson"]
 	path = thirdparty/taojson
-	url = https://github.com/schrewe/taocpp-json.git
+	url = https://github.com/taocpp/json.git
 [submodule "thirdparty/jsoncons"]
 	path = thirdparty/jsoncons
 	url = https://github.com/danielaparker/jsoncons.git
+[submodule "thirdparty/cjson"]
+	path = thirdparty/cjson
+	url = https://github.com/DaveGamble/cJSON.git
+[submodule "thirdparty/json11"]
+	path = thirdparty/json11
+	url = https://github.com/dropbox/json11.git
+[submodule "thirdparty/jsoncpp"]
+	path = thirdparty/jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp.git

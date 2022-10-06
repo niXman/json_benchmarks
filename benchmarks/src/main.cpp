@@ -1,38 +1,33 @@
-#include "tests/json_benchmarks.hpp"
 #include <iostream>
 #include <fstream>
-#include "measurements.hpp"
+#include <filesystem>
 #include <string>
+#include <vector>
+#include <cstring>
+
+#include "measurements.hpp"
+#include "tests/json_benchmarks.hpp"
 #include "json_parsing_test_reporter.hpp"
 #include "data_generator.hpp"
-#include "jsoncons/json.hpp"
-#include <filesystem>
+#include "os_tools.hpp"
 
 namespace fs = std::filesystem;
 
 using namespace json_benchmarks;
 
-void benchmarks_small_file(std::vector<json_implementation>& implementations)
+void benchmarks_small_file(std::vector<benchmarks_ptr>& implementations)
 {
     try
     {
         const char *filename = "data/input/small_file/small_file_text_array.json";
 
-        size_t file_size;
-        {
-            std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
-            file_size = in.tellg(); 
-        }
+        size_t file_size = fs::file_size(filename);
         std::string input;
         input.resize(file_size);
         std::string output;
         {
             std::ifstream in(filename, std::ifstream::binary);
             in.read(&input[0], file_size);
-            //input[file_size] = 0;
-            //jsoncons::json j = jsoncons::json::parse(in);
-            //j.dump(input);
-            //std::cout << input << std::endl;
         }
         //std::cout << input << std::endl;
         output.reserve(input.size()*2);
@@ -46,14 +41,14 @@ void benchmarks_small_file(std::vector<json_implementation>& implementations)
         os << filename << "|" << file_size << "|" << "Text,integers" << std::endl;
         os << std::endl;
         os << "Environment"
-           << "|" << "Windows, Intel" << std::endl;
+           << "|" << get_os_type() << ", " << get_cpu_type() << std::endl;
         os << "---|---" << std::endl;
         os << "Computer"
-           << "|" << "Dell Mobile Precision 2015, Intel Xeon E3-1535M v5, 32GB memory, 1TB SSD" << std::endl;
+           << "|" << get_motherboard() << ", " << get_cpu() << ", " << get_ram() << std::endl;
         os << "Operating system"
-           << "|" << "Windows 2010" << std::endl;
+           << "|" << get_os() << std::endl;
         os << "Compiler"
-           << "|" << "Visual Studio 2015" << std::endl;
+           << "|" << get_compiler() << std::endl;
 
         os << std::endl;
 
@@ -61,7 +56,7 @@ void benchmarks_small_file(std::vector<json_implementation>& implementations)
         os << "---|---" << std::endl;
         for (const auto& val : implementations)
         {
-            os << "[" << val.name << "](" << val.url << ")" << "|" << val.version << std::endl;
+            os << "[" << val->name() << "](" << val->url() << ")" << "|" << val->version() << std::endl;
         }
         os << std::endl;
 
@@ -75,7 +70,7 @@ void benchmarks_small_file(std::vector<json_implementation>& implementations)
         {
             for (size_t j = 0; j < implementations.size(); ++j)
             {
-                auto results = implementations[j].measures->measure_small(input,output);
+                auto results = implementations[j]->measure_small(input,output);
                 v[j].time_to_read += results.time_to_read;
                 v[j].time_to_write += results.time_to_write;
                 v[j].memory_used += results.memory_used;
@@ -88,7 +83,7 @@ void benchmarks_small_file(std::vector<json_implementation>& implementations)
                << "|" << v[j].time_to_read/(number_times)
                << "|" << v[j].time_to_write/(number_times)
                << "|" << v[j].memory_used/number_times
-               << "|" << implementations[j].measures->remarks()
+               << "|" << implementations[j]->notes()
                << std::endl; 
         }
         os << std::endl;
@@ -99,18 +94,14 @@ void benchmarks_small_file(std::vector<json_implementation>& implementations)
     }
 }
 
-void benchmarks_int(std::vector<json_implementation>& implementations)
+void benchmarks_int(std::vector<benchmarks_ptr>& implementations)
 {
     try
     {
         const char *filename = "data/output/persons.json";
         make_big_file(filename, 50000, 5000, 0, 0);
 
-        size_t file_size;
-        {
-                std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
-                file_size = in.tellg(); 
-        }
+        size_t file_size = fs::file_size(filename);
 
         std::ofstream os("report/performance.md");
         os << std::endl;
@@ -121,14 +112,14 @@ void benchmarks_int(std::vector<json_implementation>& implementations)
         os << filename << "|" << (file_size/1000000.0) << "|" << "Text,integers" << std::endl;
         os << std::endl;
         os << "Environment"
-           << "|" << "Windows, Intel" << std::endl;
+           << "|" << get_os_type() << ", " << get_cpu_type() << std::endl;
         os << "---|---" << std::endl;
         os << "Computer"
-           << "|" << "Dell Mobile Precision 2015, Intel Xeon E3-1535M v5, 32GB memory, 1TB SSD" << std::endl;
+           << "|" << get_motherboard() << ", " << get_cpu() << ", " << get_ram() << std::endl;
         os << "Operating system"
-           << "|" << "Windows 2010" << std::endl;
+           << "|" << get_os() << std::endl;
         os << "Compiler"
-           << "|" << "Visual Studio 2019" << std::endl;
+           << "|" << get_compiler() << std::endl;
 
         os << std::endl;
 
@@ -137,23 +128,22 @@ void benchmarks_int(std::vector<json_implementation>& implementations)
 
         for (const auto& val : implementations)
         {
-            os << "[" << val.name << "](" << val.url << ")" << "|" << val.version << std::endl;
+            os << "[" << val->name() << "](" << val->url() << ")" << "|" << val->version() << std::endl;
         }
         os << std::endl;
 
         os << "Library|Time to read (s)|Time to write (s)|Memory footprint of json value (MB)|Remarks" << std::endl;
         os << "---|---|---|---|---" << std::endl;
 
-        for (size_t j = 0; j < implementations.size(); ++j)
+        for ( const auto &impl: implementations )
         {
-            auto& impl = implementations[j];
-            std::string output_path = "data/output/persons_" + impl.name + ".json";
-            auto results = impl.measures->measure_big("data/output/persons.json",output_path.c_str());
-            os << "[" << impl.name << "](" << impl.url << ")"
+            std::string output_path = "data/output/persons_" + impl->name() + ".json";
+            auto results = impl->measure_big("data/output/persons.json",output_path.c_str());
+            os << "[" << impl->name() << "](" << impl->url() << ")"
                << "|" << (results.time_to_read/1000.0) 
                << "|" << (results.time_to_write/1000.0) 
                << "|" << (results.memory_used)
-               << "|" << impl.measures->remarks()
+               << "|" << impl->notes()
                << std::endl; 
         }
 
@@ -165,19 +155,15 @@ void benchmarks_int(std::vector<json_implementation>& implementations)
     }
 }
 
-void benchmarks_fp(std::vector<json_implementation>& implementations)
+void benchmarks_fp(std::vector<benchmarks_ptr>& implementations)
 {
     try
     {
         const char *filename = "data/output/persons_fp.json";
         make_big_file(filename, 50000, 0, 2500, 0);
 
-        size_t file_size;
-        {
-                std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
-                file_size = in.tellg(); 
-        }
- 
+        size_t file_size = fs::file_size(filename);
+
         std::ofstream os("report/performance_fp.md");
         os << std::endl;
         os << "## Read and Write Time Comparison" << std::endl << std::endl;
@@ -187,14 +173,14 @@ void benchmarks_fp(std::vector<json_implementation>& implementations)
         os << filename << "|" << (file_size/1000000.0) << "|" << "Text,doubles" << std::endl;
         os << std::endl;
         os << "Environment"
-           << "|" << "Windows, Intel" << std::endl;
+           << "|" << get_os_type() << ", " << get_cpu_type() << std::endl;
         os << "---|---" << std::endl;
         os << "Computer"
-           << "|" << "Dell Mobile Precision 2015, Intel Xeon E3-1535M v5, 32GB memory, 1TB SSD" << std::endl;
+           << "|" << get_motherboard() << ", " << get_cpu() << ", " << get_ram() << std::endl;
         os << "Operating system"
-           << "|" << "Windows 2010" << std::endl;
+           << "|" << get_os() << std::endl;
         os << "Compiler"
-           << "|" << "Visual Studio 2019" << std::endl;
+           << "|" << get_compiler() << std::endl;
 
         os << std::endl;
 
@@ -202,23 +188,22 @@ void benchmarks_fp(std::vector<json_implementation>& implementations)
         os << "---|---" << std::endl;
         for (const auto& val : implementations)
         {
-            os << "[" << val.name << "](" << val.url << ")" << "|" << val.version << std::endl;
+            os << "[" << val->name() << "](" << val->url() << ")" << "|" << val->version() << std::endl;
         }
         os << std::endl;
 
         os << "Library|Time to read (s)|Time to write (s)|Memory footprint of json value (MB)|Remarks" << std::endl;
         os << "---|---|---|---|---" << std::endl;
 
-        for (size_t j = 0; j < implementations.size(); ++j)
+        for ( const auto &impl: implementations )
         {
-            auto& impl = implementations[j];
-            std::string output_path = "data/output_fp/persons_" + impl.name + ".json";
-            auto results = impl.measures->measure_big("data/output/persons_fp.json",output_path.c_str());
-            os << "[" << impl.name << "](" << impl.url << ")"
+            std::string output_path = "data/output_fp/persons_" + impl->name() + ".json";
+            auto results = impl->measure_big("data/output/persons_fp.json",output_path.c_str());
+            os << "[" << impl->name() << "](" << impl->url() << ")"
                << "|" << (results.time_to_read/1000.0) 
                << "|" << (results.time_to_write/1000.0) 
                << "|" << (results.memory_used)
-               << "|" << impl.measures->remarks()
+               << "|" << impl->notes()
                << std::endl; 
         }
 
@@ -230,7 +215,7 @@ void benchmarks_fp(std::vector<json_implementation>& implementations)
     }
 }
 
-void json_test_suite_parsing_tests(const std::vector<json_implementation>& implementations,
+void json_test_suite_parsing_tests(const std::vector<benchmarks_ptr>& implementations,
                                   json_parsing_test_visitor& visitor)
 {
     try
@@ -244,13 +229,12 @@ void json_test_suite_parsing_tests(const std::vector<json_implementation>& imple
             {
                 std::string buffer;
                 {
-                    std::ifstream fs(path.string(), std::ios::in|std::ios::binary|std::ios::ate);
+                    size_t size = fs::file_size(path);
+                    buffer.resize(size);
+                    std::ifstream fs(path.string(), std::ios::in|std::ios::binary);
                     if (fs.is_open())
                     {
-                        size_t size = fs.tellg();
-                        buffer.resize(size);
-                        fs.seekg (0, std::ios::beg);
-                        fs.read (&buffer[0], size);
+                        fs.read(&buffer[0], size);
                     }
                 }
                 char type = path.filename().string().c_str()[0];
@@ -279,7 +263,7 @@ void json_test_suite_parsing_tests(const std::vector<json_implementation>& imple
         std::vector<std::vector<test_suite_result>> results;
         for (auto& impl : implementations)
         {
-            results.emplace_back(impl.measures->run_test_suite(pathnames));
+            results.emplace_back(impl->run_test_suite(pathnames));
         }
 
         visitor.visit(pathnames,results);
@@ -290,7 +274,7 @@ void json_test_suite_parsing_tests(const std::vector<json_implementation>& imple
     }
 }
 
-void json_checker_parsing_tests(const std::vector<json_implementation>& implementations,
+void json_checker_parsing_tests(const std::vector<benchmarks_ptr>& implementations,
                                 json_parsing_test_visitor& visitor)
 {
     try
@@ -304,13 +288,12 @@ void json_checker_parsing_tests(const std::vector<json_implementation>& implemen
             {
                 std::string buffer;
                 {
-                    std::ifstream fs(path.string(), std::ios::in|std::ios::binary|std::ios::ate);
+                    size_t size = fs::file_size(path);
+                    buffer.resize(size);
+                    std::ifstream fs(path.string(), std::ios::in|std::ios::binary);
                     if (fs.is_open())
                     {
-                        size_t size = fs.tellg();
-                        buffer.resize(size);
-                        fs.seekg (0, std::ios::beg);
-                        fs.read (&buffer[0], size);
+                        fs.read(&buffer[0], size);
                     }
                 }
                 char type = path.filename().string().c_str()[0];
@@ -339,7 +322,7 @@ void json_checker_parsing_tests(const std::vector<json_implementation>& implemen
         std::vector<std::vector<test_suite_result>> results;
         for (auto& impl : implementations)
         {
-            results.emplace_back(impl.measures->run_test_suite(pathnames));
+            results.emplace_back(impl->run_test_suite(pathnames));
         }
 
         visitor.visit(pathnames,results);
@@ -350,56 +333,68 @@ void json_checker_parsing_tests(const std::vector<json_implementation>& implemen
     }
 }
 
-int main()
+void usage(const char *argv0) {
+    const char *p = std::strrchr(argv0, fs::path::preferred_separator);
+    p = (p ? p+1: argv0);
+
+    std::cout
+    << p << " [int, float, smallfile]" << std::endl
+    << "  int       - use integers on generated BIG test data's" << std::endl
+    << "  float     - use floats on generated BIG test data's" << std::endl
+    << "  smallfile - test using small test data's" << std::endl
+    << "--- can be used together ---" << std::endl
+    << std::endl;
+}
+
+int main(int argc, char **argv)
 {
-    std::vector<json_implementation> implementations; 
+    if ( argc < 2 ) {
+        usage(argv[0]);
 
-    implementations.emplace_back("jsoncons",
-                                 "https://github.com/danielaparker/jsoncons",
-                                 "0.151.0", 
-                                 "With strict_json_parsing, uses wjson if utf16" ,
-                                  std::make_shared<jsoncons_benchmarks>());
-    implementations.emplace_back("nlohmann",
-                                 "https://github.com/nlohmann/json",
-                                 "3.7.3", 
-                                 "",
-                                 std::make_shared<nlohmann_benchmarks>());
-    implementations.emplace_back("cJSON",
-                                 "https://github.com/DaveGamble/cJSON",
-                                 "2019-11-30", 
-                                 "",
-                                 std::make_shared<cjson_benchmarks>());
-    implementations.emplace_back("json11",
-                                 "https://github.com/dropbox/json11",
-                                 "2017-06-20-2", 
-                                 "",
-                                 std::make_shared<json11_benchmarks>());
-    implementations.emplace_back("rapidjson",
-                                 "https://github.com/miloyip/rapidjson",
-                                 "2020-02-08", 
-                                 "Uses custom (non standard lib) floating point conversion",
-                                 std::make_shared<rapidjson_benchmarks>());
-    implementations.emplace_back("jsoncpp",
-                                 "https://github.com/open-source-parsers/jsoncpp",
-                                 "1.9.2", 
-                                 "Uses map for both arrays and objects",
-                                 std::make_shared<jsoncpp_benchmarks>());
-    implementations.emplace_back("json_spirit",
-                                 "http://www.codeproject.com/Articles/20027/JSON-Spirit-A-C-JSON-Parser-Generator-Implemented",
-                                 "4.1.0-1", 
-                                 "",
-                                 std::make_shared<json_spirit_benchmarks>());
-    implementations.emplace_back("taojson",
-                                 "https://github.com/taocpp/json",
-                                 "2019-07-11", 
-                                 "",
-                                 std::make_shared<taojson_benchmarks>());
+        return EXIT_FAILURE;
+    }
 
-    //benchmarks_int(implementations);
-    benchmarks_fp(implementations);
-    //benchmarks_small_file(implementations);
+    bool test_int = false;
+    bool test_float = false;
+    bool smallfile = false;
+    for ( int i = 1; i < argc; ++i ) {
+        if ( std::strcmp(argv[i], "int") == 0 ) {
+            test_int = true;
+        } else if ( std::strcmp(argv[i], "float") == 0 ) {
+            test_float = true;
+        } else if ( std::strcmp(argv[i], "smallfile") == 0 ) {
+            smallfile = true;
+        } else {
+            std::cout << "wrong command line: \"" << argv[i] << "\"" << std::endl;
+            usage(argv[0]);
 
-    /*std::vector<result_code_info> result_code_infos;
+            return EXIT_FAILURE;
+        }
+    }
+
+    std::vector<benchmarks_ptr> implementations{
+         std::make_shared<jsoncons_benchmarks>()
+        ,std::make_shared<nlohmann_benchmarks>()
+        ,std::make_shared<cjson_benchmarks>()
+        ,std::make_shared<json11_benchmarks>()
+        ,std::make_shared<rapidjson_benchmarks>()
+        ,std::make_shared<jsoncpp_benchmarks>()
+        ,std::make_shared<json_spirit_benchmarks>()
+        ,std::make_shared<taojson_benchmarks>()
+    };
+
+    if ( test_int ) {
+        benchmarks_int(implementations);
+    }
+    if ( test_float ) {
+        benchmarks_fp(implementations);
+    }
+    if ( smallfile ) {
+        benchmarks_small_file(implementations);
+    }
+
+#if 0
+    std::vector<result_code_info> result_code_infos;
     result_code_infos.push_back(result_code_info{result_code::expected_result,"Expected result","#008000"});
     result_code_infos.push_back(result_code_info{result_code::expected_success_parsing_failed,"Expected success, parsing failed","#d19b73"});
     result_code_infos.push_back(result_code_info{result_code::expected_failure_parsing_succeeded,"Expected failure, parsing succeeded","#001a75"});
@@ -411,6 +406,9 @@ int main()
     json_parsing_test_reporter reporter("Parser Comparisons", implementations, result_code_infos, fs);
     reporter.register_test("JSON Test Suite",json_test_suite_parsing_tests);
     reporter.register_test("JSON Checker",json_checker_parsing_tests);
-    reporter.run_tests();*/
+    reporter.run_tests();
+#endif // 0
+
+    return 0;
 }
 

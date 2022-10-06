@@ -1,12 +1,14 @@
 #include <fstream>
 #include <chrono>
 #include <iostream>
-#include <tao/json.hpp>
 #include <sstream>
 #include <stdio.h>
+
 #include "../measurements.hpp"
-#include "../memory_measurer.hpp"
+#include "../os_tools.hpp"
 #include "json_benchmarks.hpp"
+
+#include <tao/json.hpp>
 
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
@@ -15,7 +17,33 @@ using namespace json_benchmarks;
 
 namespace json_benchmarks {
 
-const std::string library_name = "[taojson](https://github.com/taocpp/json)";
+const std::string& taojson_benchmarks::name() const
+{
+    static const std::string s = "taojson";
+
+    return s;
+}
+
+const std::string& taojson_benchmarks::url() const
+{
+    static const std::string s = "https://github.com/taocpp/json";
+
+    return s;
+}
+
+const std::string& taojson_benchmarks::version() const
+{
+    static const std::string s = "1.0.0-beta.13";
+
+    return s;
+}
+
+const std::string& taojson_benchmarks::notes() const
+{
+    static const std::string s = "Uses modified [google/double conversion](https://github.com/google/double-conversion) routines for parsing doubles. Uses modified [jeaiii/itoa](https://github.com/jeaiii/itoa) routines for outputting integers. Uses slightly modified [Grisu2 implementation by Florian Loitsch](https://florian.loitsch.com/publications) for printing doubles, expect faster serializing.";
+
+    return s;
+}
 
 measurements taojson_benchmarks::measure_small(const std::string& input, std::string& output)
 {
@@ -26,7 +54,7 @@ measurements taojson_benchmarks::measure_small(const std::string& input, std::st
     std::string buffer;
 
     {
-        start_memory_used =  memory_measurer::get_process_memory();
+        start_memory_used =  get_process_memory();
 
         tao::json::value val;
         {
@@ -36,7 +64,7 @@ measurements taojson_benchmarks::measure_small(const std::string& input, std::st
             auto end = high_resolution_clock::now();
             time_to_read = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
-        end_memory_used =  memory_measurer::get_process_memory();
+        end_memory_used =  get_process_memory();
         {
             auto start = high_resolution_clock::now();
 
@@ -46,10 +74,10 @@ measurements taojson_benchmarks::measure_small(const std::string& input, std::st
             time_to_write = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used);
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
@@ -65,7 +93,7 @@ measurements taojson_benchmarks::measure_big(const char *input_filename, const c
     std::string buffer;
 
     {
-        start_memory_used =  memory_measurer::get_process_memory();
+        start_memory_used =  get_process_memory();
 
         tao::json::value val;
         {
@@ -82,7 +110,7 @@ measurements taojson_benchmarks::measure_big(const char *input_filename, const c
                 std::cout << "[taojson_measure_big1] " << e.what() << std::endl;
             }
         }
-        end_memory_used =  memory_measurer::get_process_memory();
+        end_memory_used =  get_process_memory();
         {
             auto start = high_resolution_clock::now();
 
@@ -102,29 +130,28 @@ measurements taojson_benchmarks::measure_big(const char *input_filename, const c
             time_to_write = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used)/1000000;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
     return results;
 }
 
-const std::string& taojson_benchmarks::remarks() const 
-{
-    static const std::string s = R"abc(Uses modified [google/double conversion](https://github.com/google/double-conversion) routines for parsing doubles. Uses modified [jeaiii/itoa](https://github.com/jeaiii/itoa) routines for outputting integers. Uses slightly modified [Grisu2 implementation by Florian Loitsch](https://florian.loitsch.com/publications) for printing doubles, expect faster serializing.)abc";
-
-    return s;
-}
 std::vector<test_suite_result> taojson_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
 {
     std::vector<test_suite_result> results;
     for (auto& file : pathnames)
     {
+#ifdef WIN32
         std::string command = "x64\\Release\\taojson_parser.exe ";
-        command = command + file.path.string();
+#elif defined(__linux__)
+        std::string command = "./parsers/taojson_parser/build/taojson_parser ";
+#else
+#endif
+        command += file.path.string();
         int result = std::system(command.c_str());
 
         if (file.type == expected_result::expect_success)

@@ -1,12 +1,14 @@
-#include "jsoncons/json.hpp"
-#include "jsoncons/json_reader.hpp"
 #include <chrono>
 #include <fstream>
 #include <locale>
 #include <codecvt>
+
 #include "../measurements.hpp"
-#include "../memory_measurer.hpp"
+#include "../os_tools.hpp"
 #include "json_benchmarks.hpp"
+
+#include <jsoncons/json.hpp>
+#include <jsoncons/json_reader.hpp>
 
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
@@ -16,7 +18,33 @@ using namespace jsoncons;
 
 namespace json_benchmarks {
 
-const std::string library_name = "[jsoncons](https://github.com/danielaparker/jsoncons)";
+const std::string& jsoncons_benchmarks::name() const
+{
+    static const std::string s = "jsoncons";
+
+    return s;
+}
+
+const std::string& jsoncons_benchmarks::url() const
+{
+    static const std::string s = "https://github.com/danielaparker/jsoncons";
+
+    return s;
+}
+
+const std::string& jsoncons_benchmarks::version() const
+{
+    static const std::string s = __STRINGIZE_VERSION(JSONCONS_VERSION_MAJOR, JSONCONS_VERSION_MINOR, JSONCONS_VERSION_PATCH);
+
+    return s;
+}
+
+const std::string& jsoncons_benchmarks::notes() const
+{
+    static const std::string s = "Uses sorted `std::vector` of key/value pairs for objects, expect smaller memory footprint.Uses slightly modified [grisu3_59_56 implementation by Florian Loitsch](https://florian.loitsch.com/publications) plus fallback for printing doubles, expect faster serializing.";
+
+    return s;
+}
 
 measurements jsoncons_benchmarks::measure_small(const std::string& input, std::string& output)
 {
@@ -26,7 +54,7 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
     size_t time_to_write;
 
     {
-        start_memory_used =  memory_measurer::get_process_memory();
+        start_memory_used =  get_process_memory();
         {
             jsoncons::json root;
             {
@@ -43,7 +71,7 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
                     exit(1);
                 }
             }
-            end_memory_used =  memory_measurer::get_process_memory();
+            end_memory_used =  get_process_memory();
             {
                 auto start = high_resolution_clock::now();
                 root.dump(output);
@@ -52,10 +80,10 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
             }
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = end_memory_used > start_memory_used ? end_memory_used - start_memory_used : 0;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
@@ -64,14 +92,14 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
 
 measurements jsoncons_benchmarks::measure_big(const char *input_filename, const char* output_filename)
 {
-    std::cout << "jsoncons output_filename: " << output_filename << "\n";
+    //std::cout << "jsoncons output_filename: " << output_filename << "\n";
     size_t start_memory_used;
     size_t end_memory_used;
     size_t time_to_read;
     size_t time_to_write;
 
     {
-        start_memory_used =  memory_measurer::get_process_memory();
+        start_memory_used =  get_process_memory();
         {
             jsoncons::json root;
             {
@@ -89,7 +117,7 @@ measurements jsoncons_benchmarks::measure_big(const char *input_filename, const 
                     exit(1);
                 }
             }
-            end_memory_used =  memory_measurer::get_process_memory();
+            end_memory_used =  get_process_memory();
             {
                 std::ofstream os;
                 os.open(output_filename, std::ios_base::out | std::ios_base::binary);
@@ -100,21 +128,14 @@ measurements jsoncons_benchmarks::measure_big(const char *input_filename, const 
             }
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used)/1000000;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
     return results;
-}
-
-const std::string& jsoncons_benchmarks::remarks() const 
-{
-    static const std::string s = R"abc(Uses sorted `std::vector` of key/value pairs for objects, expect smaller memory footprint.Uses slightly modified [grisu3_59_56 implementation by Florian Loitsch](https://florian.loitsch.com/publications) plus fallback for printing doubles, expect faster serializing.)abc";
-
-    return s;
 }
 
 std::vector<test_suite_result> jsoncons_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)

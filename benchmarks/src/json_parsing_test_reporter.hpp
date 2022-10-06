@@ -5,6 +5,8 @@
 #include <string>
 #include <sstream>
 #include <functional>
+
+#include "tests/json_benchmarks.hpp"
 #include "measurements.hpp"
 
 namespace json_benchmarks {
@@ -21,15 +23,15 @@ namespace json_benchmarks {
     private:
         const size_t max_text_length = 30;
         std::string title_;
-        std::vector<json_implementation> implementations_;
+        std::vector<benchmarks_ptr> implementations_;
         std::vector<result_code_info> result_code_info_;
         std::ostream* os_ptr_;
-        std::vector<std::tuple<std::string,std::string,std::function<void(const std::vector<json_implementation>&,json_parsing_test_visitor&)>>> tests_;
+        std::vector<std::tuple<std::string,std::string,std::function<void(const std::vector<benchmarks_ptr>&,json_parsing_test_visitor&)>>> tests_;
         size_t counter_;
     public:
 
         json_parsing_test_reporter(const std::string& title,
-                                   const std::vector<json_implementation>& implementations,
+                                   const std::vector<benchmarks_ptr>& implementations,
                                    const std::vector<result_code_info>& result_code_info,
                                    std::ostream& os)
             : title_(title),
@@ -45,7 +47,7 @@ namespace json_benchmarks {
         }
 
         void register_test(const std::string& heading, 
-                           std::function<void(const std::vector<json_implementation>&,json_parsing_test_visitor&)> test)
+                           std::function<void(const std::vector<benchmarks_ptr> &, json_parsing_test_visitor &)> test)
         {
             std::ostringstream os;
             os << "a" << counter_;
@@ -82,7 +84,7 @@ namespace json_benchmarks {
         for (const auto& lib : implementations_)
         {
             (*os_ptr_) << "<th class=\"rotate\"><div><span>";
-            (*os_ptr_) << lib.name << "-" << lib.version;
+            (*os_ptr_) << lib->name() << "-" << lib->version();
             (*os_ptr_) << "</span></div></th>\n"; 
         }
         (*os_ptr_) << R"(
@@ -115,7 +117,7 @@ namespace json_benchmarks {
         for (const auto& lib : implementations_)
         {
             (*os_ptr_) << "<th class=\"rotate\"><div><span>";
-            (*os_ptr_) << lib.name;
+            (*os_ptr_) << lib->name();
             (*os_ptr_) << "</span></div></th>\n"; 
         }
         (*os_ptr_) << R"(

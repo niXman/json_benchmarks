@@ -1,17 +1,19 @@
-#include "rapidjson/document.h"
-#include "rapidjson/error/en.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/filereadstream.h"
-#include "rapidjson/filewritestream.h"
 #include <cstdio>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <cassert>
 #include <vector>
+
 #include "../measurements.hpp"
-#include "../memory_measurer.hpp"
+#include "../os_tools.hpp"
 #include "json_benchmarks.hpp"
+
+#include <rapidjson/document.h>
+#include <rapidjson/error/en.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/filereadstream.h>
+#include <rapidjson/filewritestream.h>
 
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
@@ -22,7 +24,33 @@ using namespace rapidjson;
 
 namespace json_benchmarks {
 
-const std::string library_name = "[rapidjson](https://github.com/miloyip/rapidjson)";
+const std::string& rapidjson_benchmarks::name() const
+{
+    static const std::string s = "rapidjson";
+
+    return s;
+}
+
+const std::string& rapidjson_benchmarks::url() const
+{
+    static const std::string s = "https://github.com/miloyip/rapidjson";
+
+    return s;
+}
+
+const std::string& rapidjson_benchmarks::version() const
+{
+    static const std::string s = __STRINGIZE_VERSION(RAPIDJSON_MAJOR_VERSION, RAPIDJSON_MINOR_VERSION, RAPIDJSON_PATCH_VERSION);
+
+    return s;
+}
+
+const std::string& rapidjson_benchmarks::notes() const
+{
+    static const std::string s = "Uses custom floating point parsing, expect faster parsing. Uses girsu3 for printing doubles, expect faster serializing. Uses custom allocation and flat map for objects, expect smaller memory footprint.";
+
+    return s;
+}
 
 measurements rapidjson_benchmarks::measure_small(const std::string& input, std::string& output)
 {
@@ -31,7 +59,7 @@ measurements rapidjson_benchmarks::measure_small(const std::string& input, std::
     size_t time_to_read = 0;
     size_t time_to_write = 0;
 
-    start_memory_used =  memory_measurer::get_process_memory();
+    start_memory_used =  get_process_memory();
     {
         Document d;
         try
@@ -46,7 +74,7 @@ measurements rapidjson_benchmarks::measure_small(const std::string& input, std::
             std::cout << e.what() << std::endl;
             exit(1);
         }
-        end_memory_used =  memory_measurer::get_process_memory();
+        end_memory_used =  get_process_memory();
         {
             try
             {
@@ -64,10 +92,10 @@ measurements rapidjson_benchmarks::measure_small(const std::string& input, std::
             }
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used);
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
@@ -76,14 +104,13 @@ measurements rapidjson_benchmarks::measure_small(const std::string& input, std::
 
 measurements rapidjson_benchmarks::measure_big(const char *input_filename, const char* output_filename)
 {
-    std::cout << "rapidjson output_filename: " << output_filename << "\n";
-
+    //std::cout << "rapidjson output_filename: " << output_filename << "\n";
     size_t start_memory_used = 0;
     size_t end_memory_used = 0;
     size_t time_to_read = 0;
     size_t time_to_write = 0;
 
-    start_memory_used =  memory_measurer::get_process_memory();
+    start_memory_used =  get_process_memory();
     {
         Document d;
         try
@@ -110,13 +137,12 @@ measurements rapidjson_benchmarks::measure_big(const char *input_filename, const
             std::cout << e.what() << std::endl;
             exit(1);
         }
-        end_memory_used =  memory_measurer::get_process_memory();
+        end_memory_used =  get_process_memory();
         {
             try
             {
-                FILE* fp;
-                errno_t err  = fopen_s(&fp, output_filename, "wb");
-                if( err != 0 )
+                FILE* fp = fopen(output_filename, "wb");
+                if( !fp )
                 {
                     printf( "The file '%s' was not opened\n", output_filename);
                     exit(1);
@@ -139,21 +165,14 @@ measurements rapidjson_benchmarks::measure_big(const char *input_filename, const
             }
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used)/1000000;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
     return results;
-}
-
-const std::string& rapidjson_benchmarks::remarks() const 
-{
-    static const std::string s = R"abc(Uses custom floating point parsing, expect faster parsing. Uses girsu3 for printing doubles, expect faster serializing. Uses custom allocation and flat map for objects, expect smaller memory footprint.)abc";
-
-    return s;
 }
 
 void print(FILE* fp, const Value& val)
@@ -171,7 +190,13 @@ std::vector<test_suite_result> rapidjson_benchmarks::run_test_suite(std::vector<
     for (auto& file : pathnames)
     {
         Document d;
+#ifdef WIN32
         std::string command = "x64\\Release\\rapidjson_parser.exe ";
+#elif defined(__linux__)
+        std::string command = "./parsers/rapidjson/build/rapidjson_parser ";
+#else
+#   error "unknown OS"
+#endif
         command = command + file.path.string();
         int result = std::system(command.c_str());
         if (file.type == expected_result::expect_success)

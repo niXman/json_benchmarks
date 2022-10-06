@@ -1,12 +1,14 @@
 #include <fstream>
 #include <chrono>
 #include <iostream>
-#include "json11.hpp"
 #include <sstream>
 #include <stdio.h>
+
 #include "../measurements.hpp"
-#include "../memory_measurer.hpp"
+#include "../os_tools.hpp"
 #include "json_benchmarks.hpp"
+
+#include <json11.hpp>
 
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
@@ -16,7 +18,33 @@ using namespace json11;
 
 namespace json_benchmarks {
 
-const std::string library_name = "[json11](https://github.com/dropbox/json11)";
+const std::string& json11_benchmarks::name() const
+{
+    static const std::string s = "json11";
+
+    return s;
+}
+
+const std::string& json11_benchmarks::url() const
+{
+    static const std::string s = "https://github.com/dropbox/json11";
+
+    return s;
+}
+
+const std::string& json11_benchmarks::version() const
+{
+    static const std::string s = "master (2df9473)";
+
+    return s;
+}
+
+const std::string& json11_benchmarks::notes() const
+{
+    static const std::string s = "Uses pimpl idiom, implementation uses virtual inheritance, expect larger memory footprint.";
+
+    return s;
+}
 
 measurements json11_benchmarks::measure_small(const std::string& input, std::string& output)
 {
@@ -27,7 +55,7 @@ measurements json11_benchmarks::measure_small(const std::string& input, std::str
     std::string buffer;
 
     {
-        start_memory_used =  memory_measurer::get_process_memory();
+        start_memory_used =  get_process_memory();
 
         Json val;
         {
@@ -43,7 +71,7 @@ measurements json11_benchmarks::measure_small(const std::string& input, std::str
             auto end = high_resolution_clock::now();
             time_to_read = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
-        end_memory_used =  memory_measurer::get_process_memory();
+        end_memory_used =  get_process_memory();
         {
             auto start = high_resolution_clock::now();
 
@@ -53,10 +81,10 @@ measurements json11_benchmarks::measure_small(const std::string& input, std::str
             time_to_write = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used);
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
@@ -72,7 +100,7 @@ measurements json11_benchmarks::measure_big(const char *input_filename, const ch
     std::string buffer;
 
     {
-        start_memory_used =  memory_measurer::get_process_memory();
+        start_memory_used =  get_process_memory();
 
         Json val;
         {
@@ -99,7 +127,7 @@ measurements json11_benchmarks::measure_big(const char *input_filename, const ch
             auto end = high_resolution_clock::now();
             time_to_read = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         }
-        end_memory_used =  memory_measurer::get_process_memory();
+        end_memory_used =  get_process_memory();
         {
             auto start = high_resolution_clock::now();
 
@@ -113,21 +141,14 @@ measurements json11_benchmarks::measure_big(const char *input_filename, const ch
             time_to_write = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         }
     }
-    size_t final_memory_used = memory_measurer::get_process_memory();
+    size_t final_memory_used = get_process_memory();
     
     measurements results;
-    results.library_name = library_name;
+    results.library_name = name();
     results.memory_used = (end_memory_used - start_memory_used)/1000000;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
     return results;
-}
-
-const std::string& json11_benchmarks::remarks() const 
-{
-    static const std::string s = R"abc(Uses pimpl idiom, implementation uses virtual inheritance, expect larger memory footprint.)abc";
-
-    return s;
 }
 
 std::vector<test_suite_result> json11_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
