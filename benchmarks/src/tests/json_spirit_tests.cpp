@@ -64,7 +64,8 @@ measurements json_spirit_benchmarks::measure_small(const std::string& input, std
                 auto start = high_resolution_clock::now();
                 try
                 {
-                    read_string(input, root);
+                    const char *begin = input.c_str();
+                    read_range(begin, begin + input.size(), root);
                     auto end = high_resolution_clock::now();
                     time_to_read = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
                 }
@@ -89,7 +90,7 @@ measurements json_spirit_benchmarks::measure_small(const std::string& input, std
 
     measurements results;
     results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used);
+    results.memory_used = end_memory_used - start_memory_used;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
     return results;

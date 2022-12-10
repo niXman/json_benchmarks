@@ -1,206 +1,97 @@
-#include <fstream>
-#include <chrono>
-#include <iostream>
-#include <sstream>
-#include <stdio.h>
 
-#include "../measurements.hpp"
-#include "../os_tools.hpp"
-#include "json_benchmarks.hpp"
+#include "json11_tests.hpp"
+
+#include <fstream>
+#include <iostream> // TODO:
 
 #include <json11.hpp>
 
-using std::chrono::high_resolution_clock;
-using std::chrono::time_point;
-using std::chrono::duration;
-using namespace json_benchmarks;
-using namespace json11;
-
 namespace json_benchmarks {
 
-const std::string& json11_benchmarks::name() const
-{
-    static const std::string s = "json11";
+io_type json11_benchmarks::input_io_type() const { return io_type::string_buffer; }
+io_type json11_benchmarks::output_io_type() const { return io_type::string_buffer; }
 
-    return s;
+const char* json11_benchmarks::name() const { return "json11"; }
+
+const char* json11_benchmarks::url() const { return "https://github.com/dropbox/json11"; }
+
+const char* json11_benchmarks::version() const { return "master (2df9473)"; }
+
+const char* json11_benchmarks::notes() const {
+    return "Uses pimpl idiom, implementation uses virtual inheritance, expect larger memory footprint."
+            "can read and write from/to std::string only, so the data should be loaded into a buffer first."
+    ;
 }
 
-const std::string& json11_benchmarks::url() const
-{
-    static const std::string s = "https://github.com/dropbox/json11";
-
-    return s;
+void* json11_benchmarks::alloc_json_obj(io_device *in) const {
+    return new json11::Json;
 }
 
-const std::string& json11_benchmarks::version() const
-{
-    static const std::string s = "master (2df9473)";
+std::pair<bool, std::string>
+json11_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+    auto *input  = in->input_io<io_type::string_buffer>();
+    auto *json = static_cast<json11::Json *>(*json_obj_ptr);
 
-    return s;
-}
-
-const std::string& json11_benchmarks::notes() const
-{
-    static const std::string s = "Uses pimpl idiom, implementation uses virtual inheritance, expect larger memory footprint.";
-
-    return s;
-}
-
-measurements json11_benchmarks::measure_small(const std::string& input, std::string& output)
-{
-    size_t start_memory_used;
-    size_t end_memory_used;
-    size_t time_to_read;
-    size_t time_to_write;
-    std::string buffer;
-
-    {
-        start_memory_used =  get_process_memory();
-
-        Json val;
-        {
-            std::string err;
-            auto start = high_resolution_clock::now();
-            val = Json::parse(input,err);
-            if (err.length() > 0)
-            {
-                std::cout << err << std::endl;
-                exit(1);
-            }
-
-            auto end = high_resolution_clock::now();
-            time_to_read = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        }
-        end_memory_used =  get_process_memory();
-        {
-            auto start = high_resolution_clock::now();
-
-            val.dump(output);
-
-            auto end = high_resolution_clock::now();
-            time_to_write = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        }
-    }
-    size_t final_memory_used = get_process_memory();
-    
-    measurements results;
-    results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used);
-    results.time_to_read = time_to_read;
-    results.time_to_write = time_to_write;
-    return results;
-}
-
-measurements json11_benchmarks::measure_big(const char *input_filename, const char* output_filename)
-{
-    size_t start_memory_used;
-    size_t end_memory_used;
-    size_t time_to_read;
-    size_t time_to_write;
-    std::string buffer;
-
-    {
-        start_memory_used =  get_process_memory();
-
-        Json val;
-        {
-            std::string err;
-            auto start = high_resolution_clock::now();
-            FILE *fp = fopen(input_filename, "r");
-            if (!fp) {
-                perror(input_filename);
-                exit(EXIT_FAILURE);
-            }
-            fseek(fp, 0, SEEK_END);
-            size_t size = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-            buffer.resize(size);
-            fread(&buffer[0], 1, size, fp);
-            fclose(fp);
-            val = Json::parse(buffer,err);
-            if (err.length() > 0)
-            {
-                std::cout << err << std::endl;
-                exit(1);
-            }
-
-            auto end = high_resolution_clock::now();
-            time_to_read = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        }
-        end_memory_used =  get_process_memory();
-        {
-            auto start = high_resolution_clock::now();
-
-            std::string s;
-            val.dump(s);
-            std::ofstream os;
-            os.open(output_filename, std::ios_base::out | std::ios_base::binary);
-            os << s;
-
-            auto end = high_resolution_clock::now();
-            time_to_write = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        }
-    }
-    size_t final_memory_used = get_process_memory();
-    
-    measurements results;
-    results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used)/1000000;
-    results.time_to_read = time_to_read;
-    results.time_to_write = time_to_write;
-    return results;
-}
-
-std::vector<test_suite_result> json11_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
-{
-    std::vector<test_suite_result> results;
-    for (auto& file : pathnames)
-    {
-        if (file.type == expected_result::expect_success)
-        {
-            std::string err;
-            Json val = Json::parse(file.text,err);
-            
-            if (err.length() == 0)
-            {
-                results.emplace_back(result_code::expected_result);
-            }
-            else
-            {
-                results.emplace_back(result_code::expected_success_parsing_failed);
-            }
-        }
-        else if (file.type == expected_result::expect_failure)
-        {
-            std::string err;
-            Json val = Json::parse(file.text,err);
-            if (err.length() == 0)
-            {
-                results.emplace_back(result_code::expected_failure_parsing_succeeded);
-            }
-            else
-            {
-                results.emplace_back(result_code::expected_result);
-            }
-        }
-        else if (file.type == expected_result::result_undefined)
-        {
-            std::string err;
-            Json val = Json::parse(file.text,err);
-            if (err.length() == 0)
-            {
-                    results.emplace_back(result_code::result_undefined_parsing_succeeded);
-            }
-            else
-            {
-                results.emplace_back(result_code::result_undefined_parsing_failed);
-            }
-        }
+    std::string err;
+    *json = json11::Json::parse(input->stream(), err);
+    if (err.length() > 0) {
+        return {false, std::move(err)};
     }
 
-    return results;
+    return {true, std::move(err)};
 }
+
+std::pair<bool, std::string>
+json11_benchmarks::print(void *json_obj_ptr, io_device *out) {
+    auto *output  = out->input_io<io_type::string_buffer>();
+    auto *json = static_cast<json11::Json *>(json_obj_ptr);
+    auto &string = output->stream();
+
+    json->dump(string);
+
+    return {true, std::string{}};
 }
 
+void json11_benchmarks::free_json_obj(void *json_obj_ptr) const {
+    auto *json = static_cast<json11::Json *>(json_obj_ptr);
 
+    delete json;
+}
 
+std::pair<std::size_t, std::size_t>
+json11_benchmarks::allowed_leaks() const { return {120, 3}; }
+
+//test_suite_result json11_benchmarks::run_test_suite(const test_suite_files &pathnames) {
+//    std::vector<test_suite_result> results;
+//    for (auto& file : pathnames) {
+//        if (file.type == expected_result::expect_success) {
+//            std::string err;
+//            json11::Json val = json11::Json::parse(file.text, err);
+//            if (err.length() == 0) {
+//                results.emplace_back(result_code::expected_result);
+//            } else {
+//                results.emplace_back(result_code::expected_success_parsing_failed);
+//            }
+//        } else if (file.type == expected_result::expect_failure) {
+//            std::string err;
+//            json11::Json val = json11::Json::parse(file.text,err);
+//            if (err.length() == 0) {
+//                results.emplace_back(result_code::expected_failure_parsing_succeeded);
+//            } else {
+//                results.emplace_back(result_code::expected_result);
+//            }
+//        } else if (file.type == expected_result::result_undefined) {
+//            std::string err;
+//            json11::Json val = json11::Json::parse(file.text,err);
+//            if (err.length() == 0) {
+//                results.emplace_back(result_code::result_undefined_parsing_succeeded);
+//            } else {
+//                results.emplace_back(result_code::result_undefined_parsing_failed);
+//            }
+//        }
+//    }
+
+//    return results;
+//}
+
+} // json_benchmarks

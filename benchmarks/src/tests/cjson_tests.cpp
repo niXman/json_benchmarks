@@ -1,216 +1,129 @@
-#include <fstream>
-#include <chrono>
-#include <iostream>
-#include <stdint.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <vector>
-#include <string>
+
 #include <cstring>
 
-#include "../measurements.hpp"
-#include "../os_tools.hpp"
-#include "json_benchmarks.hpp"
+#include "cjson_tests.hpp"
+#include "../stringize.hpp"
 
 #include <cJSON.h>
-
-using std::chrono::high_resolution_clock;
-using std::chrono::time_point;
-using std::chrono::duration;
+#include <unistd.h>
 
 namespace json_benchmarks {
 
-const std::string& cjson_benchmarks::name() const
-{
-    static const std::string s = "cJSON";
+io_type cjson_benchmarks::input_io_type() const { return io_type::mmap_streams; }
+io_type cjson_benchmarks::output_io_type() const { return io_type::string_buffer; }
 
-    return s;
+const char* cjson_benchmarks::name() const { return "cJSON"; }
+
+const char* cjson_benchmarks::url() const { return "https://github.com/DaveGamble/cJSON"; }
+
+const char* cjson_benchmarks::version() const {
+    return __STRINGIZE_VERSION(CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
 }
 
-const std::string& cjson_benchmarks::url() const
-{
-    static const std::string s = "https://github.com/DaveGamble/cJSON";
-
-    return s;
+const char* cjson_benchmarks::notes() const {
+    return "Inefficient storage (items do not share the same space), expect larger memory footprint. "
+           "Uses sprintf and sscanf to support locale-independent round-trip."
+           "Can read using 'begin' and 'length' args, so memory mapping is used."
+    ;
 }
 
-const std::string& cjson_benchmarks::version() const
-{
-    static const std::string s = __STRINGIZE_VERSION(CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
-
-    return s;
+void* cjson_benchmarks::alloc_json_obj(io_device */*in*/) const {
+    return nullptr;
 }
 
-const std::string& cjson_benchmarks::notes() const
-{
-    static const std::string s = "Inefficient storage (items do not share the same space), expect larger memory footprint. Uses sprintf and sscanf to support locale-independent round-trip.";
+std::pair<bool, std::string>
+cjson_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+    auto *istream  = in->input_io<io_type::mmap_streams>();
+    auto pair = istream->stream();
 
-    return s;
-}
+    *((cJSON**)json_obj_ptr) = cJSON_ParseWithLength(pair.first, pair.second);
 
-measurements cjson_benchmarks::measure_small(const std::string& input, std::string& output)
-{
-    size_t start_memory_used;
-    size_t end_memory_used;
-    size_t time_to_read;
-    size_t time_to_write;
+    std::string err;
+    if ( ! *json_obj_ptr ) {
+        err = cJSON_GetErrorPtr();
 
-    {
-        start_memory_used =  get_process_memory();
-
-        cJSON* root = nullptr;
-        {
-            try
-            {
-                auto start = high_resolution_clock::now();
-                char *endptr;
-                root = cJSON_Parse(input.c_str());
-                auto end = high_resolution_clock::now();
-                time_to_read = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << e.what() << std::endl;
-                exit(1);
-            }
-        }
-        end_memory_used = get_process_memory();
-        {
-            auto start = high_resolution_clock::now();
-            output = cJSON_PrintUnformatted(root);
-            auto end = high_resolution_clock::now();
-            time_to_write = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        }
-        cJSON_Delete(root);
-    }
-    size_t final_memory_used = get_process_memory();
-    
-    measurements results;
-    results.library_name = name();
-    results.memory_used = end_memory_used > start_memory_used ? end_memory_used - start_memory_used : 0;
-    results.time_to_read = time_to_read;
-    results.time_to_write = time_to_write;
-    return results;
-}
-
-measurements cjson_benchmarks::measure_big(const char *input_filename, const char* output_filename)
-{
-    size_t start_memory_used;
-    size_t end_memory_used;
-    size_t time_to_read;
-    size_t time_to_write;
-
-    {
-        start_memory_used =  get_process_memory();
-
-        cJSON* root = nullptr;
-        std::string buffer;
-        {
-            try
-            {
-                auto start = high_resolution_clock::now();
-                FILE *fp = fopen(input_filename, "r");
-                if (!fp) {
-                    perror(input_filename);
-                    exit(EXIT_FAILURE);
-                }
-                fseek(fp, 0, SEEK_END);
-                size_t size = ftell(fp);
-                fseek(fp, 0, SEEK_SET);
-                buffer.resize(size);
-                fread(&buffer[0], 1, size, fp);
-                fclose(fp);
-                char *endptr;
-                root = cJSON_Parse(buffer.c_str());
-                auto end = high_resolution_clock::now();
-                time_to_read = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << e.what() << std::endl;
-                exit(1);
-            }
-        }
-        end_memory_used =  get_process_memory();
-        {
-            auto start = high_resolution_clock::now();
-            //FILE *fp = fopen(output_filename, "w");
-            //if (!fp) {
-            //    perror(output_filename);
-            //    exit(EXIT_FAILURE);
-            //}
-            char* s = cJSON_PrintUnformatted(root);
-            std::ofstream os; //(output_filename/*,std::ofstream::binary*/);
-                              //os.rdbuf()->pubsetbuf(writeBuffer, sizeof(writeBuffer));
-            os.open(output_filename, std::ios_base::out | std::ios_base::binary);
-            os.write(s,std::strlen(s));
-            auto end = high_resolution_clock::now();
-            time_to_write = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        }
-        cJSON_Delete(root);
-    }
-    size_t final_memory_used = get_process_memory();
-    
-    measurements results;
-    results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used)/1000000;
-    results.time_to_read = time_to_read;
-    results.time_to_write = time_to_write;
-    return results;
-}
-
-std::vector<test_suite_result> cjson_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
-{
-    std::vector<test_suite_result> results;
-    for (auto& file : pathnames)
-    {
-        std::string text(file.text);
-        if (file.type == expected_result::expect_success)
-        {
-            cJSON* j = cJSON_Parse(text.c_str());
-            if (j != nullptr) 
-            {
-                results.emplace_back(result_code::expected_result);
-            }
-            else
-            {
-                results.emplace_back(result_code::expected_success_parsing_failed);
-            }
-            cJSON_Delete(j);
-        }
-        else if (file.type == expected_result::expect_failure)
-        {
-            cJSON* j = cJSON_Parse(text.c_str());
-            if (j != nullptr) 
-            {
-                results.emplace_back(result_code::expected_failure_parsing_succeeded);
-            }
-            else
-            {
-                results.emplace_back(result_code::expected_result);
-            }
-
-        }
-        else if (file.type == expected_result::result_undefined)
-        {
-            cJSON* j = cJSON_Parse(text.c_str());
-            if (j != nullptr) 
-            {
-                results.emplace_back(result_code::result_undefined_parsing_succeeded);
-            }
-            else
-            {
-                results.emplace_back(result_code::result_undefined_parsing_failed);
-            }
-            cJSON_Delete(j);
-        }
+        return {false, err};
     }
 
-    return results;
+    return {true, err};
 }
 
+std::pair<bool, std::string>
+cjson_benchmarks::print(void *json_obj_ptr, io_device *out) {
+    auto *json = static_cast<cJSON *>(json_obj_ptr);
+    auto *ostream = out->output_io<io_type::string_buffer>();
+    auto &string = ostream->stream();
+
+    auto reserved = string.capacity();
+    string.resize(reserved);
+    bool ok = cJSON_PrintPreallocated(json, string.data(), string.size(), 0);
+    std::string err;
+    if ( !ok ) {
+        err = cJSON_GetErrorPtr();
+
+        return {false, std::move(err)};
+    }
+
+    auto len = std::strlen(string.data());
+    ostream->resize(len);
+
+    return {true, std::move(err)};
 }
 
+void cjson_benchmarks::free_json_obj(void *json_obj_ptr) const {
+    auto *json = static_cast<cJSON *>(json_obj_ptr);
+    cJSON_Delete(json);
+}
 
+//std::vector<test_suite_result> cjson_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
+//{
+//    std::vector<test_suite_result> results;
+//    for (auto& file : pathnames)
+//    {
+//        std::string text(file.text);
+//        if (file.type == expected_result::expect_success)
+//        {
+//            cJSON* j = cJSON_Parse(text.c_str());
+//            if (j != nullptr)
+//            {
+//                cJSON_Delete(j);
+//                results.emplace_back(result_code::expected_result);
+//            }
+//            else
+//            {
+//                results.emplace_back(result_code::expected_success_parsing_failed);
+//            }
+//        }
+//        else if (file.type == expected_result::expect_failure)
+//        {
+//            cJSON* j = cJSON_Parse(text.c_str());
+//            if (j != nullptr)
+//            {
+//                cJSON_Delete(j);
+//                results.emplace_back(result_code::expected_failure_parsing_succeeded);
+//            }
+//            else
+//            {
+//                results.emplace_back(result_code::expected_result);
+//            }
 
+//        }
+//        else if (file.type == expected_result::result_undefined)
+//        {
+//            cJSON* j = cJSON_Parse(text.c_str());
+//            if (j != nullptr)
+//            {
+//                cJSON_Delete(j);
+//                results.emplace_back(result_code::result_undefined_parsing_succeeded);
+//            }
+//            else
+//            {
+//                results.emplace_back(result_code::result_undefined_parsing_failed);
+//            }
+//        }
+//    }
+
+//    return results;
+//}
+
+} // namespace json_benchmarks

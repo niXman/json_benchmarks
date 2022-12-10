@@ -1,8 +1,9 @@
+
 #ifndef DATA_GENERATOR_HPP
 #define DATA_GENERATOR_HPP
 
-const uint64_t escape_sequence = 1;
+#include <string>
 
-void make_big_file(const char *filename, size_t count, size_t numIntegers, size_t numDoubles, uint64_t flags);
+std::size_t make_test_file(const std::string &filename, size_t count, size_t numInts, size_t numFloats, std::size_t flags);
 
 #endif

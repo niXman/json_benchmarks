@@ -5,35 +5,25 @@
 // See https://sourceforge.net/projects/jsoncons/files/ for latest version
 // See https://sourceforge.net/p/jsoncons/wiki/Home/ for documentation.
 
+#include <fstream>
+#include <cassert>
+
 #ifdef WIN32
 #   include "windows.h"
 #   include "psapi.h"
 #elif defined(__linux__)
+#   include <sys/types.h>
+#   include <sys/stat.h>
 #   include <unistd.h>
 #   include <sys/resource.h>
 #else
 #   error "unknown OS"
 #endif
 
-#include <fstream>
 #include "os_tools.hpp"
+#include "stringize.hpp"
 
 namespace json_benchmarks {
-
-std::size_t get_process_memory()
-{
-#ifdef WIN32
-    PROCESS_MEMORY_COUNTERS pmc;
-    GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
-    return pmc.WorkingSetSize;
-#elif defined(__linux__)
-    struct ::rusage usage;
-    ::getrusage(RUSAGE_SELF, &usage);
-    return static_cast<size_t>(usage.ru_maxrss * 1024L);
-#else
-#   error "unknown OS"
-#endif    
-}
 
 std::string get_os_type() {
 #ifdef WIN32
@@ -226,4 +216,18 @@ std::string get_ram() {
 #endif
 }
 
+std::size_t file_size(const char *fname) {
+    struct stat st;
+    assert(::stat(fname, &st) == 0);
+
+    return st.st_size;
 }
+
+std::size_t file_size(int fd) {
+    struct stat st;
+    assert(::fstat(fd, &st) == 0);
+
+    return st.st_size;
+}
+
+} // ns json_benchmarks

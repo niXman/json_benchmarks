@@ -1,214 +1,131 @@
-#include <fstream>
+
 #include <chrono>
 #include <iostream>
-#include <sstream>
 
-#include "../measurements.hpp"
-#include "../os_tools.hpp"
-#include "json_benchmarks.hpp"
+#include "jsoncpp_tests.hpp"
+#include "../stringize.hpp"
 
 #include <json/json.h>
 
 using std::chrono::high_resolution_clock;
-using std::chrono::time_point;
 using std::chrono::duration;
-using namespace json_benchmarks;
-using namespace Json;
 
 namespace json_benchmarks {
 
-const std::string& jsoncpp_benchmarks::name() const
-{
-    static const std::string s = "jsoncpp";
+io_type jsoncpp_benchmarks::input_io_type() const { return io_type::string_buffer; }
+io_type jsoncpp_benchmarks::output_io_type() const { return io_type::std_strstreams; }
 
-    return s;
+const char* jsoncpp_benchmarks::name() const { return "jsoncpp"; }
+
+const char* jsoncpp_benchmarks::url() const { return "https://github.com/open-source-parsers/jsoncpp"; }
+
+const char* jsoncpp_benchmarks::version() const {
+    return __STRINGIZE_VERSION(JSONCPP_VERSION_MAJOR, JSONCPP_VERSION_MINOR, JSONCPP_VERSION_PATCH);
 }
 
-const std::string& jsoncpp_benchmarks::url() const
-{
-    static const std::string s = "https://github.com/open-source-parsers/jsoncpp";
-
-    return s;
+const char* jsoncpp_benchmarks::notes() const {
+    return "Uses std::map for both arrays and objects, expect larger memory footprint. "
+           "Can read using 'begin' and 'end' pointers, then will use string as source. "
+           "But can't write to buffer, then will write into stringstream."
+    ;
 }
 
-const std::string& jsoncpp_benchmarks::version() const
-{
-    static const std::string s = __STRINGIZE_VERSION(JSONCPP_VERSION_MAJOR, JSONCPP_VERSION_MINOR, JSONCPP_VERSION_PATCH);
-
-    return s;
+void *jsoncpp_benchmarks::alloc_json_obj(io_device *in) const {
+    return new Json::Value;
 }
 
-const std::string& jsoncpp_benchmarks::notes() const
-{
-    static const std::string s = "Uses std::map for both arrays and objects, expect larger memory footprint.";
+std::pair<bool, std::string>
+jsoncpp_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+    auto &root = *static_cast<Json::Value *>(*json_obj_ptr);;
+    auto *input  = in->input_io<io_type::string_buffer>();
+    auto &string = input->stream();
 
-    return s;
-}
+    Json::Reader reader;
+    auto pair = input->stream();
+    if ( !reader.parse(string.data(), string.data() + string.length(), root) ) {
+        auto err = reader.getFormattedErrorMessages();
 
-measurements jsoncpp_benchmarks::measure_small(const std::string& input, std::string& output)
-{
-    size_t start_memory_used;
-    size_t end_memory_used;
-    size_t time_to_read;
-    size_t time_to_write;
-
-    {
-        start_memory_used =  get_process_memory();
-
-        Value root;
-        {
-            try
-            {
-                auto start = high_resolution_clock::now();
-                Reader reader;
-                if (!reader.parse(input, root))
-                {
-                    std::cerr << "jsoncpp failed." << std::endl;
-                }
-                auto end = high_resolution_clock::now();
-                time_to_read = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << e.what() << std::endl;
-                exit(1);
-            }
-        }
-        end_memory_used =  get_process_memory();
-        {
-            std::stringstream os;
-            auto start = high_resolution_clock::now();
-
-
-            Json::StreamWriterBuilder builder;
-            builder.settings_["indentation"] = "";
-            std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-            writer->write(root, &os);
-
-            output = os.str();
-
-            auto end = high_resolution_clock::now();
-            time_to_write = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        }
-    }
-    size_t final_memory_used = get_process_memory();
-    
-    measurements results;
-    results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used);
-    results.time_to_read = time_to_read;
-    results.time_to_write = time_to_write;
-    return results;
-}
-
-measurements jsoncpp_benchmarks::measure_big(const char *input_filename, const char* output_filename)
-{
-    size_t start_memory_used;
-    size_t end_memory_used;
-    size_t time_to_read;
-    size_t time_to_write;
-
-    {
-        start_memory_used =  get_process_memory();
-
-        Value root;
-        {
-            try
-            {
-                auto start = high_resolution_clock::now();
-                std::ifstream is(input_filename);
-                is >> root;
-                //Reader reader;
-                //if (!reader.parse(input_filename, root))
-                //{
-                //    std::cerr << "jsoncpp failed." << std::endl;
-                //}
-                auto end = high_resolution_clock::now();
-                time_to_read = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << e.what() << std::endl;
-                exit(1);
-            }
-        }
-        end_memory_used =  get_process_memory();
-        {
-            std::ofstream os;
-            os.open(output_filename, std::ios_base::out | std::ios_base::binary);
-            auto start = high_resolution_clock::now();
-
-            Json::StreamWriterBuilder builder;
-            builder.settings_["indentation"] = "";
-            std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-            writer->write(root, &os);
-
-            auto end = high_resolution_clock::now();
-            time_to_write = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        }
-    }
-    size_t final_memory_used = get_process_memory();
-    
-    measurements results;
-    results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used)/1000000;
-    results.time_to_read = time_to_read;
-    results.time_to_write = time_to_write;
-    return results;
-}
-
-std::vector<test_suite_result> jsoncpp_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
-{
-    std::vector<test_suite_result> results;
-    for (auto& file : pathnames)
-    {
-        if (file.type == expected_result::expect_success)
-        {
-            try
-            {
-                Value val;
-                std::istringstream is(file.text);
-                is >> val;
-                results.emplace_back(result_code::expected_result);
-            }
-            catch (const std::exception&)
-            {
-                results.emplace_back(result_code::expected_success_parsing_failed);
-            }
-        }
-        else if (file.type == expected_result::expect_failure)
-        {
-            try
-            {
-                Value val;
-                std::istringstream is(file.text);
-                is >> val;
-                results.emplace_back(result_code::expected_failure_parsing_succeeded);
-            }
-            catch (const std::exception&)
-            {
-                results.emplace_back(result_code::expected_result);
-            }
-        }
-        else if (file.type == expected_result::result_undefined)
-        {
-            try
-            {
-                Value val;
-                std::istringstream is(file.text);
-                is >> val;
-                results.emplace_back(result_code::result_undefined_parsing_succeeded);
-            }
-            catch (const std::exception&)
-            {
-                results.emplace_back(result_code::result_undefined_parsing_failed);
-            }
-        }
+        return {false, err};
     }
 
-    return results;
+    return {true, std::string{}};
 }
+
+std::pair<bool, std::string>
+jsoncpp_benchmarks::print(void *json_obj_ptr, io_device *out) {
+    auto &json = *static_cast<Json::Value *>(json_obj_ptr);;
+    auto *stream = out->output_io<io_type::std_strstreams>();
+    auto &ostream = stream->stream();
+
+    Json::StreamWriterBuilder builder;
+    builder.settings_["indentation"] = "";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+
+    std::string err;
+    try {
+        writer->write(json, &ostream);
+    } catch (const std::exception &ex) {
+        err = ex.what();
+    }
+
+    return {err.empty(), std::move(err)};
 }
 
+void jsoncpp_benchmarks::free_json_obj(void *json_obj_ptr) const {
+    auto *json = static_cast<Json::Value *>(json_obj_ptr);
+    delete json;
+}
 
+//std::vector<test_suite_result> jsoncpp_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
+//{
+//    std::vector<test_suite_result> results;
+//    for (auto& file : pathnames)
+//    {
+//        if (file.type == expected_result::expect_success)
+//        {
+//            try
+//            {
+//                Value val;
+//                std::istringstream is(file.text);
+//                is >> val;
+//                results.emplace_back(result_code::expected_result);
+//            }
+//            catch (const std::exception&)
+//            {
+//                results.emplace_back(result_code::expected_success_parsing_failed);
+//            }
+//        }
+//        else if (file.type == expected_result::expect_failure)
+//        {
+//            try
+//            {
+//                Value val;
+//                std::istringstream is(file.text);
+//                is >> val;
+//                results.emplace_back(result_code::expected_failure_parsing_succeeded);
+//            }
+//            catch (const std::exception&)
+//            {
+//                results.emplace_back(result_code::expected_result);
+//            }
+//        }
+//        else if (file.type == expected_result::result_undefined)
+//        {
+//            try
+//            {
+//                Value val;
+//                std::istringstream is(file.text);
+//                is >> val;
+//                results.emplace_back(result_code::result_undefined_parsing_succeeded);
+//            }
+//            catch (const std::exception&)
+//            {
+//                results.emplace_back(result_code::result_undefined_parsing_failed);
+//            }
+//        }
+//    }
 
+//    return results;
+//}
+
+} // namespace json_benchmarks

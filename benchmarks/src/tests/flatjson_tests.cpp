@@ -1,104 +1,109 @@
 
-#include "jsoncons_tests.hpp"
+#include "flatjson_tests.hpp"
 #include "../stringize.hpp"
 
-#include <jsoncons/json.hpp>
-#include <jsoncons/json_reader.hpp>
+#include <flatjson/flatjson.hpp>
 
 namespace json_benchmarks {
 
-io_type jsoncons_benchmarks::input_io_type() const { return io_type::mmap_streams; }
-io_type jsoncons_benchmarks::output_io_type() const { return io_type::string_buffer; }
+io_type flatjson_benchmarks::input_io_type() const { return io_type::mmap_streams; }
+io_type flatjson_benchmarks::output_io_type() const { return io_type::string_buffer; }
 
-const char* jsoncons_benchmarks::name() const { return "jsoncons"; }
+const char* flatjson_benchmarks::name() const { return "flatjson"; }
 
-const char* jsoncons_benchmarks::url() const { return "https://github.com/danielaparker/jsoncons"; }
+const char* flatjson_benchmarks::url() const { return "https://github.com/niXman/flatjson"; }
 
-const char* jsoncons_benchmarks::version() const {
-    return __STRINGIZE_VERSION(JSONCONS_VERSION_MAJOR, JSONCONS_VERSION_MINOR, JSONCONS_VERSION_PATCH);
+const char* flatjson_benchmarks::version() const {
+    return FJ_VERSION_STRING;
 }
 
-const char* jsoncons_benchmarks::notes() const {
-    return "Uses sorted `std::vector` of key/value pairs for objects, expect smaller memory footprint."
-           "Uses slightly modified [grisu3_59_56 implementation by Florian Loitsch](https://florian.loitsch.com/publications) "
-           "plus fallback for printing doubles, expect faster serializing."
+const char* flatjson_benchmarks::notes() const {
+    return "it can work without any allocation when the number of tokens known in advance. "
+            "in the usual case the parser will count the number of tokens first and then will allocate the required number of tokens at once. "
+            "the downside here may seem to be the size of the memory required for the token."
     ;
 }
 
-void* jsoncons_benchmarks::alloc_json_obj(io_device *in) const {
-    return new jsoncons::json;
-}
-
-std::pair<bool, std::string>
-jsoncons_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+void* flatjson_benchmarks::alloc_json_obj(io_device *in) const {
     auto *input  = in->input_io<io_type::mmap_streams>();
     auto pair = input->stream();
 
-    std::string err;
-    try {
-        *static_cast<jsoncons::json *>(*json_obj_ptr) = jsoncons::json::parse(pair.first, pair.second);
-    } catch (const std::exception &ex) {
-        err = ex.what();
-    }
+    auto *parser = flatjson::alloc_parser(pair.first, pair.first + pair.second);
 
-    if ( !err.empty() ) {
+    return parser;
+}
+
+std::pair<bool, std::string>
+flatjson_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+    auto *json = static_cast<flatjson::parser *>(*json_obj_ptr);
+    flatjson::parse(json);
+
+    std::string err;
+    if ( !flatjson::is_valid(json) ) {
+        err = flatjson::get_error_message(json);
+
         return {false, err};
     }
+
+#ifdef __FJ__ANALYZE_PARSER
+    flatjson::dump_parser_stat(json);
+#endif
 
     return {true, err};
 }
 
 std::pair<bool, std::string>
-jsoncons_benchmarks::print(void *json_obj_ptr, io_device *out) {
-    auto *json = static_cast<jsoncons::json *>(json_obj_ptr);
+flatjson_benchmarks::print(void *json_obj_ptr, io_device *out) {
+    auto *json = static_cast<flatjson::parser *>(json_obj_ptr);
     auto *output = out->output_io<io_type::string_buffer>();
     auto &string = output->stream();
+    auto reserved = string.capacity();
+    string.resize(reserved);
 
     std::string err;
-    try {
-        json->dump(string);
-    } catch (const std::exception &ex) {
-        err = ex.what();
-    }
+    auto beg = flatjson::iter_begin(json);
+    auto end = flatjson::iter_end(json);
+    auto wr = flatjson::serialize(beg, end, string.data(), string.capacity());
+    string.resize(wr);
 
-    return {err.empty(), std::move(err)};
+    return {err.empty(), err};
 }
 
-void jsoncons_benchmarks::free_json_obj(void *json_obj_ptr) const {
-    auto *json = static_cast<jsoncons::json *>(json_obj_ptr);
-    delete json;
+void flatjson_benchmarks::free_json_obj(void *json_obj_ptr) const {
+    auto *json = static_cast<flatjson::parser *>(json_obj_ptr);
+    flatjson::free_parser(json);
 }
 
 #if 0
-const std::string& jsoncons_benchmarks::name() const
+const std::string& flatjson_benchmarks::name() const
 {
     static const std::string s = "jsoncons";
 
     return s;
 }
 
-const std::string& jsoncons_benchmarks::url() const
+const std::string& flatjson_benchmarks::url() const
 {
     static const std::string s = "https://github.com/danielaparker/jsoncons";
 
     return s;
 }
 
-const std::string& jsoncons_benchmarks::version() const
+const std::string& flatjson_benchmarks::version() const
 {
     static const std::string s = __STRINGIZE_VERSION(JSONCONS_VERSION_MAJOR, JSONCONS_VERSION_MINOR, JSONCONS_VERSION_PATCH);
 
     return s;
 }
 
-const std::string& jsoncons_benchmarks::notes() const
+const std::string& flatjson_benchmarks::notes() const
 {
     static const std::string s = "Uses sorted `std::vector` of key/value pairs for objects, expect smaller memory footprint.Uses slightly modified [grisu3_59_56 implementation by Florian Loitsch](https://florian.loitsch.com/publications) plus fallback for printing doubles, expect faster serializing.";
 
     return s;
 }
 
-measurements jsoncons_benchmarks::measure_small(const std::string& input, std::string& output)
+measurements flatjson_benchmarks::measure_small(const std::string& input, std::string& output)
 {
     size_t start_memory_used;
     size_t end_memory_used;
@@ -133,7 +138,7 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
         }
     }
     size_t final_memory_used = get_process_memory();
-    
+
     measurements results;
     results.library_name = name();
     results.memory_used = end_memory_used > start_memory_used ? end_memory_used - start_memory_used : 0;
@@ -142,7 +147,7 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
     return results;
 }
 
-measurements jsoncons_benchmarks::measure_big(const char *input_filename, const char* output_filename)
+measurements flatjson_benchmarks::measure_big(const char *input_filename, const char* output_filename)
 {
     //std::cout << "jsoncons output_filename: " << output_filename << "\n";
     size_t start_memory_used;
@@ -185,7 +190,7 @@ measurements jsoncons_benchmarks::measure_big(const char *input_filename, const 
         }
     }
     size_t final_memory_used = get_process_memory();
-    
+
     measurements results;
     results.library_name = name();
     results.memory_used = end_memory_used - start_memory_used;
@@ -194,7 +199,7 @@ measurements jsoncons_benchmarks::measure_big(const char *input_filename, const 
     return results;
 }
 
-std::vector<test_suite_result> jsoncons_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
+std::vector<test_suite_result> flatjson_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
 {
     std::vector<test_suite_result> results;
     for (auto& file : pathnames)

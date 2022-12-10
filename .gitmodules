@@ -25,3 +25,9 @@
 [submodule "thirdparty/taojson"]
 	path = thirdparty/taojson
 	url = https://github.com/taocpp/json.git
+[submodule "thirdparty/malloc-stat"]
+	path = thirdparty/malloc-stat
+	url = https://github.com/niXman/malloc-stat.git
+[submodule "thirdparty/flatjson"]
+	path = thirdparty/flatjson
+	url = https://github.com/niXman/flatjson.git

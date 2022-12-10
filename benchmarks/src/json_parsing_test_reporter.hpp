@@ -6,7 +6,7 @@
 #include <sstream>
 #include <functional>
 
-#include "tests/json_benchmarks.hpp"
+#include "benchmarks.hpp"
 #include "measurements.hpp"
 
 namespace json_benchmarks {

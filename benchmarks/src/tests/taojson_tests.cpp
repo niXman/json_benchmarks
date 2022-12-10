@@ -78,7 +78,7 @@ measurements taojson_benchmarks::measure_small(const std::string& input, std::st
     
     measurements results;
     results.library_name = name();
-    results.memory_used = (end_memory_used - start_memory_used);
+    results.memory_used = end_memory_used - start_memory_used;
     results.time_to_read = time_to_read;
     results.time_to_write = time_to_write;
     return results;

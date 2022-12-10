@@ -11,13 +11,6 @@
 #include <string>
 #include <cstdint>
 
-#define __STRINGIZE_IMPL(x) #x
-#define __STRINGIZE(x) __STRINGIZE_IMPL(x)
-#define __STRINGIZE_VERSION(major, minor, bugfix) \
-        __STRINGIZE(major) \
-    "." __STRINGIZE(minor) \
-    "." __STRINGIZE(bugfix)
-
 namespace json_benchmarks {
 
 std::size_t get_process_memory();
@@ -29,7 +22,10 @@ std::string get_cpu_type();
 std::string get_cpu();
 std::string get_ram();
 
-}
+std::size_t file_size(const char *fname);
+std::size_t file_size(int fd);
+
+} // ns json_benchmarks
 
 #endif
 
