@@ -15,7 +15,7 @@
 #include "io_device.hpp"
 
 #include <malloc-stat/api.h>
-#include <justargs/justargs.hpp>
+#include <cmdargs/cmdargs.hpp>
 
 namespace fs = std::filesystem;
 
@@ -23,13 +23,14 @@ using namespace json_benchmarks;
 
 malloc_stat_get_stat_fnptr get_alloc_stat = nullptr;
 
+/*************************************************************************************************/
+
 #ifdef SMALL_FILE_TEST_ENABLED
 bool benchmarks_small_file(
      std::size_t iter_times
     ,const benchmarks_list &implementations
     ,const std::string &input_fname
-    ,const std::string &output_dir
-    ,const std::string &output_fname_prefix)
+    ,const std::string &output_dir)
 {
     try {
         std::ofstream os("report/performance_small_file_text_array.md");
@@ -117,12 +118,14 @@ bool benchmarks_small_file(
 }
 #endif // SMALL_FILE_TEST_ENABLED
 
+/*************************************************************************************************/
+
 bool benchmark(
      const benchmarks_list &implementations
     ,const std::string &report_fname
     ,const std::string &input_fname
     ,const std::string &output_dir
-    ,const std::string &output_fname_prefix)
+    ,std::size_t json_flags)
 {
     try {
         auto fsize = file_size(input_fname.c_str());
@@ -159,16 +162,10 @@ bool benchmark(
         for ( const auto &impl: implementations ) {
             std::cout << "  name: " << impl->name() << std::endl;
 
-            std::string output_fname = output_dir;
-            output_fname += "/";
-            output_fname += output_fname_prefix;
-            output_fname += impl->name();
-            output_fname += ".json";
-
             measurements stat;
             stat.name = impl->name();
 
-            auto [input_io, output_io] = impl->create_io(input_fname, output_fname);
+            auto [input_io, output_io] = impl->create_io(input_fname);
             output_io->reserve(input_io->size() * 2);
 
             ///////////////////////////////////////////////////////// prepare
@@ -177,7 +174,7 @@ bool benchmark(
             auto prepare_start = impl->start_time();
             MALLOC_STAT_RESET_STAT(get_alloc_stat);
 
-            auto *json_object = impl->alloc_json_obj(input_io.get());
+            impl->prepare(input_io.get(), json_flags);
 
             malloc_stat_vars prepare_stat = MALLOC_STAT_GET_STAT(get_alloc_stat);
             auto prepare_time = impl->duration(prepare_start);
@@ -189,7 +186,7 @@ bool benchmark(
             auto parse_start = impl->start_time();
             MALLOC_STAT_RESET_STAT(get_alloc_stat);
 
-            auto [parse_ok, parse_err] = impl->parse(&json_object, input_io.get());
+            auto [parse_ok, parse_err] = impl->parse(input_io.get(), json_flags);
             if ( !parse_ok ) {
                 stat.errmsg = parse_err;
 
@@ -213,7 +210,7 @@ bool benchmark(
             MALLOC_STAT_RESET_STAT(get_alloc_stat);
 
             if ( parse_ok ) {
-                auto [print_ok, print_err] = impl->print(json_object, output_io.get());
+                auto [print_ok, print_err] = impl->print(output_io.get(), json_flags);
                 if ( !print_ok ) {
                     stat.errmsg = print_err;
 
@@ -237,7 +234,7 @@ bool benchmark(
             auto free_start = impl->start_time();
             MALLOC_STAT_RESET_STAT(get_alloc_stat);
 
-            impl->free_json_obj(json_object);
+            impl->finish();
 
             malloc_stat_vars free_stat = MALLOC_STAT_GET_STAT(get_alloc_stat);
             auto free_time = impl->duration(free_start);
@@ -247,7 +244,7 @@ bool benchmark(
             std::cout << "    comparing... " << std::flush;
             auto check_start = impl->start_time();
 
-            //auto check_res = impl->check(input_io.get(), output_io.get());
+            //auto check_res = impl->check(input_io.get(), output_io.get(), json_flags);
 
             auto check_time = impl->duration(check_start);
 
@@ -320,7 +317,7 @@ bool benchmark(
             }
         }
         os << std::endl;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         std::cout << "benchmarks error: " << e.what() << std::endl;
 
         return false;
@@ -328,6 +325,8 @@ bool benchmark(
 
     return true;
 }
+
+/*************************************************************************************************/
 
 #if 0
 void json_test_suite_parsing_tests(const std::vector<benchmarks_ptr>& implementations,
@@ -456,25 +455,18 @@ void usage(const char *argv0) {
     p = (p ? p+1: argv0);
 
     std::cout
-        << p << " [int, float, smallfile]" << std::endl
-        << "  ints      - use integers on generated BIG test data" << std::endl
-        << "  floats    - use floats on generated BIG test data" << std::endl
+        << p << " [ints, floats, strings, mixed, smallfile]" << std::endl
+        << "  ints      - use integers for generate test data" << std::endl
+        << "  floats    - use floats for generate test data" << std::endl
+        << "  strings   - use strings for generate test data" << std::endl
+        << "  keywords  - use JSON keywords for generate test data" << std::endl
+        << "  mixed     - use mixed mode for generate test data" << std::endl
         << "  smallfile - test using small test data" << std::endl
+        << "  despaced  - generated test data will not contain any spaces" << std::endl
         << "--- can be used together ---" << std::endl
         << std::endl
     ;
 }
-
-struct kw: justargs::kwords_group {
-    JUSTARGS_OPTION(type, std::string, "test type selector"); // valid: ints, floats, strings, mixed
-    JUSTARGS_OPTION(compacted, bool, "test data will be generated as compacted JSON", optional);
-    JUSTARGS_OPTION(num_ints, std::size_t, "number of integers in generated JSON", optional);
-    JUSTARGS_OPTION(num_floats, std::size_t, "number of floats in generated JSON", optional);
-    JUSTARGS_OPTION(num_strings, std::size_t, "number of strings in generated JSON", optional);
-
-    JUSTARGS_OPTION_HELP();
-    JUSTARGS_OPTION_VERSION();
-} static const kwords;
 
 int main(int argc, char **argv) {
     get_alloc_stat = MALLOC_STAT_GET_STAT_FNPTR();
@@ -487,105 +479,144 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    bool ok{};
-    std::string emsg{};
-//    auto args = justargs::parse_args(&ok, &emsg, argc, argv, kwords);
-    if ( !ok ) {
-        std::cout << "args parse error: " << emsg << std::endl;
+    struct kwords: cmdargs::kwords_group {
+        CMDARGS_OPTION_ADD(mode, e_data_generator_mode::k_e, "test mode selector"
+            ,validator_([](const char *str, std::size_t len){
+                for ( const auto &it: s_data_generator_mode ) {
+                    if ( std::strncmp(it, str, len) == 0 ) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ,converter_([](void *dstptr, const char *str, std::size_t len){
+                auto &dst = *static_cast<e_data_generator_mode::k_e *>(dstptr);
+                std::string s{str, len};
+                dst = s == s_data_generator_mode[0]
+                    ? e_data_generator_mode::ints
+                    : s == s_data_generator_mode[1]
+                        ? e_data_generator_mode::floats
+                        : s == s_data_generator_mode[2]
+                            ? e_data_generator_mode::strings
+                            : s == s_data_generator_mode[3]
+                                ? e_data_generator_mode::keywords
+                                : s == s_data_generator_mode[4]
+                                    ? e_data_generator_mode::mixed
+                                    : e_data_generator_mode::smallfile
+                ;
+
+                return true;
+            })
+        );
+        CMDARGS_OPTION_ADD(despaced, bool, "test data will be generated as compacted JSON", optional);
+        CMDARGS_OPTION_ADD(num_ints, std::size_t, "number of integers in generated JSON", optional);
+        CMDARGS_OPTION_ADD(num_floats, std::size_t, "number of floats in generated JSON", optional);
+        CMDARGS_OPTION_ADD(num_strings, std::size_t, "number of strings in generated JSON", optional);
+        CMDARGS_OPTION_ADD(num_keywords, std::size_t, "number of keywords in generated JSON", optional);
+        CMDARGS_OPTION_ADD(num_repeats, std::size_t, "number of strings in generated JSON", optional);
+
+        CMDARGS_OPTION_ADD_HELP();
+        CMDARGS_OPTION_ADD_VERSION();
+    } static const kwords;
+
+    std::string emsg;
+    auto args = cmdargs::parse_args(&emsg, argc, argv, kwords);
+    if ( !emsg.empty() ) {
+        std::cout << "cmdline parse error: " << emsg << std::endl;
 
         return EXIT_FAILURE;
     }
+    if ( args.is_set(kwords.help) ) {
+        cmdargs::show_help(std::cout, argv[0], args);
 
-    bool test_ints = false;
-    bool test_floats = false;
-#ifdef SMALL_FILE_TEST_ENABLED
-    bool small_file = false;
-#endif // SMALL_FILE_TEST_ENABLED
+        return EXIT_SUCCESS;
+    }
+    if ( args.is_set(kwords.version) ) {
+        std::cout << "version: " << std::endl;
 
-    std::string test_file_fname;
-    std::size_t test_file_count = 0;
-    std::size_t test_file_num_ints = 0;
-    std::size_t test_file_num_floats = 0;
-    std::size_t test_file_flags = 0;
-
-    for ( int i = 1; i < argc; ++i ) {
-        if ( std::strcmp(argv[i], "ints") == 0 ) {
-            test_ints = true;
-            test_file_fname = "data/output/persons.json";
-            test_file_count = 5000;
-            test_file_num_ints = 10000;
-            test_file_num_floats = 10000;
-        } else if ( std::strcmp(argv[i], "floats") == 0 ) {
-            test_floats = true;
-            test_file_fname = "data/output_fp/persons_fp.json";
-            test_file_count = 5000;
-            test_file_num_ints = 10000;
-            test_file_num_floats = 10000;
-        } else if ( std::strcmp(argv[i], "smallfile") == 0 ) {
-#ifdef SMALL_FILE_TEST_ENABLED
-            small_file = true;
-#endif // SMALL_FILE_TEST_ENABLED
-        } else {
-            std::cout << "wrong command line: \"" << argv[i] << "\"" << std::endl;
-            usage(argv[0]);
-
-            return EXIT_FAILURE;
-        }
+        return EXIT_SUCCESS;
     }
 
+    const auto mode        = args.get(kwords.mode);
+    const auto despaced    = args.get(kwords.despaced, false);
+    const auto num_ints    = args.get(kwords.num_ints, 5000);
+    const auto num_floats  = args.get(kwords.num_floats, 5000);
+    const auto num_strings = args.get(kwords.num_strings, 5000);
+    const auto num_keywords= args.get(kwords.num_keywords, 5000);
+    const auto num_repeats = args.get(kwords.num_repeats, 5000);
+    std::cout
+        << kwords.mode.name() << ": " << mode << ", "
+        << kwords.despaced.name() << ": " << despaced << ", "
+        << kwords.num_ints.name() << ": " << num_ints << ", "
+        << kwords.num_floats.name() << ": " << num_floats << ", "
+        << kwords.num_strings.name() << ": " << num_strings << ", "
+        << kwords.num_keywords.name() << ": " << num_keywords << ", "
+        << kwords.num_repeats.name() << ": " << num_repeats << std::endl
+    ;
+
+    static const std::string test_file_fname = "data/output/testdata.json";
     std::string output_dir = fs::path{test_file_fname}.parent_path();
     if ( !fs::exists(output_dir) ) {
         fs::create_directories(output_dir);
     }
 
-    if ( test_ints || test_floats ) {
-        std::cout
-            << "test file (" << test_file_fname << ") generation..."
-        << std::flush;
-        auto time_to_write = make_test_file(
-             test_file_fname
-            ,test_file_count
-            ,test_file_num_ints
-            ,test_file_num_floats
-            ,0
-        );
-        std::cout
-            << "took " << (time_to_write/1000.0) << " seconds to write"
-        << std::endl;
+    std::cout << "test file (" << test_file_fname << ") generation..." << std::flush;
+    std::size_t flags = mode | (despaced ? e_data_generator_mode::compacted : 0u);
+    auto time_to_write = make_test_file(
+         test_file_fname
+        ,num_repeats
+        ,num_ints
+        ,num_floats
+        ,num_strings
+        ,num_keywords
+        ,flags
+    );
+    std::cout << "took " << (time_to_write/1000.0) << " seconds, "
+              << human_size(fs::file_size(test_file_fname)) << " bytes" << std::endl;
+
+    std::string report_fname;
+    switch ( mode ) {
+        case e_data_generator_mode::ints: {
+            report_fname = "reports/ints.md";
+            break;
+        }
+        case e_data_generator_mode::floats: {
+            report_fname = "reports/floats.md";
+            break;
+        }
+        case e_data_generator_mode::strings: {
+            report_fname = "reports/strings.md";
+            break;
+        }
+        case e_data_generator_mode::keywords: {
+            report_fname = "reports/keywords.md";
+            break;
+        }
+        case e_data_generator_mode::mixed: {
+            report_fname = "reports/mixed.md";
+            break;
+        }
+        case e_data_generator_mode::smallfile: {
+            report_fname = "reports/smallfile.md";
+            break;
+        }
+        default: assert("wrong mode" == nullptr);
     }
 
-    benchmarks_list implementations = create_benchmarks();
+    std::cout << "ints test started..." << std::endl;
+    std::size_t json_flags = 0;
+    json_flags = despaced ? (json_flags | e_json_flags::despaced) : 0u;
 
-    if ( test_ints ) {
-        const std::string report_fname = "report/performance.md";
-        const std::string output_fname_prefix = "persons_";
-
-        std::cout << "ints test started..." << std::endl;
-        if ( !benchmark(
-             implementations
-            ,report_fname
-            ,test_file_fname
-            ,output_dir
-            ,output_fname_prefix)
-        ) {
-            return EXIT_FAILURE;
-        }
-    }
-
-    if ( test_floats ) {
-        const std::string report_fname = "report/performance_fp.md";
-        const std::string output_fname_prefix = "persons_fp_";
-
-        std::cout << "floats test started..." << std::endl;
-        if ( !benchmark(
-             implementations
-            ,report_fname
-            ,test_file_fname
-            ,output_dir
-            ,output_fname_prefix)
-        ) {
-            return EXIT_FAILURE;
-        }
+    auto benchmarks = create_benchmarks();
+    if ( !benchmark(
+         benchmarks
+        ,report_fname
+        ,test_file_fname
+        ,output_dir
+        ,json_flags)
+    ) {
+        return EXIT_FAILURE;
     }
 
 #ifdef SMALL_FILE_TEST_ENABLED

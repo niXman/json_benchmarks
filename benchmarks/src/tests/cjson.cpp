@@ -1,9 +1,8 @@
 
-#include <cstring>
-
-#include "cjson_tests.hpp"
+#include "cjson.hpp"
 #include "../stringize.hpp"
 
+#include <cstring>
 #include <cJSON.h>
 #include <unistd.h>
 
@@ -27,19 +26,21 @@ const char* cjson_benchmarks::notes() const {
     ;
 }
 
-void* cjson_benchmarks::alloc_json_obj(io_device */*in*/) const {
-    return nullptr;
+static cJSON *local_obj = nullptr;
+
+void cjson_benchmarks::prepare(io_device */*in*/, std::size_t /*flags*/) const {
+
 }
 
 std::pair<bool, std::string>
-cjson_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+cjson_benchmarks::parse(io_device *in, std::size_t flags) {
     auto *istream  = in->input_io<io_type::mmap_streams>();
     auto pair = istream->stream();
 
-    *((cJSON**)json_obj_ptr) = cJSON_ParseWithLength(pair.first, pair.second);
+    local_obj = cJSON_ParseWithLength(pair.first, pair.second);
 
     std::string err;
-    if ( ! *json_obj_ptr ) {
+    if ( !local_obj ) {
         err = cJSON_GetErrorPtr();
 
         return {false, err};
@@ -49,14 +50,13 @@ cjson_benchmarks::parse(void **json_obj_ptr, io_device *in) {
 }
 
 std::pair<bool, std::string>
-cjson_benchmarks::print(void *json_obj_ptr, io_device *out) {
-    auto *json = static_cast<cJSON *>(json_obj_ptr);
+cjson_benchmarks::print(io_device *out, std::size_t flags) {
     auto *ostream = out->output_io<io_type::string_buffer>();
     auto &string = ostream->stream();
 
     auto reserved = string.capacity();
     string.resize(reserved);
-    bool ok = cJSON_PrintPreallocated(json, string.data(), string.size(), 0);
+    bool ok = cJSON_PrintPreallocated(local_obj, string.data(), string.size(), 0);
     std::string err;
     if ( !ok ) {
         err = cJSON_GetErrorPtr();
@@ -70,9 +70,9 @@ cjson_benchmarks::print(void *json_obj_ptr, io_device *out) {
     return {true, std::move(err)};
 }
 
-void cjson_benchmarks::free_json_obj(void *json_obj_ptr) const {
-    auto *json = static_cast<cJSON *>(json_obj_ptr);
-    cJSON_Delete(json);
+void cjson_benchmarks::finish() const {
+    cJSON_Delete(local_obj);
+    local_obj = nullptr;
 }
 
 //std::vector<test_suite_result> cjson_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)

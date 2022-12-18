@@ -11,20 +11,25 @@ namespace json_benchmarks {
 
 /*************************************************************************************************/
 
+struct e_json_flags {
+    enum {
+        despaced = 1u << 0
+    };
+};
+
+/*************************************************************************************************/
+
 struct benchmarks {
     virtual ~benchmarks() = default;
     // used to allocate the root object, to warmup input data, count a tokens, etc...
-    virtual void* alloc_json_obj(io_device *in) const = 0;
-    // the pointer to pointer here because of cJSON, it can't work using
-    // prev allocated cJSON as ti's root, so 'alloc_json_obj()' return NULL
-    // but the root object is actually created in this mem-fn and we need
-    // to somehow pass it on above level.
-    virtual std::pair<bool, std::string> parse(void **json_obj_ptr, io_device *in) = 0;
-    virtual std::pair<bool, std::string> print(void *json_obj_ptr, io_device *out) = 0;
-    virtual void  free_json_obj(void *json_obj_ptr) const = 0;
+    // pointer/object ot that type should be accessed inside the CPP file only.
+    virtual void prepare(io_device *in, std::size_t flags) const = 0;
+    virtual std::pair<bool, std::string> parse(io_device *in, std::size_t flags) = 0;
+    virtual std::pair<bool, std::string> print(io_device *out, std::size_t flags) = 0;
+    virtual void  finish() const = 0;
 
     // just compare the source and the generated json for structure equality
-    std::pair<bool, std::string> check(io_device *in, io_device *out) const;
+    std::pair<bool, std::string> check(io_device *in, io_device *out, std::size_t flags) const;
 
     // this was introduced because of 'json11' because it uses a singleton
     // contains static vars witch is initialized on 'Json' ctor, but freed at the end of the program.
@@ -44,7 +49,7 @@ struct benchmarks {
     virtual const char* notes() const = 0;
 
     std::pair<std::unique_ptr<io_device>, std::unique_ptr<io_device>>
-    create_io(const std::string &input_fname, const std::string &output_fname) const;
+    create_io(const std::string &input_fname) const;
 
     std::size_t start_time();
     std::size_t duration(std::size_t start);

@@ -1,14 +1,8 @@
 
-#include <chrono>
-#include <iostream>
-
-#include "jsoncpp_tests.hpp"
+#include "jsoncpp.hpp"
 #include "../stringize.hpp"
 
 #include <json/json.h>
-
-using std::chrono::high_resolution_clock;
-using std::chrono::duration;
 
 namespace json_benchmarks {
 
@@ -30,19 +24,20 @@ const char* jsoncpp_benchmarks::notes() const {
     ;
 }
 
-void *jsoncpp_benchmarks::alloc_json_obj(io_device *in) const {
-    return new Json::Value;
+static Json::Value *local_obj = nullptr;
+
+void jsoncpp_benchmarks::prepare(io_device *in, std::size_t flags) const {
+    local_obj = new Json::Value;
 }
 
 std::pair<bool, std::string>
-jsoncpp_benchmarks::parse(void **json_obj_ptr, io_device *in) {
-    auto &root = *static_cast<Json::Value *>(*json_obj_ptr);;
+jsoncpp_benchmarks::parse(io_device *in, std::size_t flags) {
     auto *input  = in->input_io<io_type::string_buffer>();
     auto &string = input->stream();
 
     Json::Reader reader;
     auto pair = input->stream();
-    if ( !reader.parse(string.data(), string.data() + string.length(), root) ) {
+    if ( !reader.parse(string.data(), string.data() + string.length(), *local_obj) ) {
         auto err = reader.getFormattedErrorMessages();
 
         return {false, err};
@@ -52,8 +47,7 @@ jsoncpp_benchmarks::parse(void **json_obj_ptr, io_device *in) {
 }
 
 std::pair<bool, std::string>
-jsoncpp_benchmarks::print(void *json_obj_ptr, io_device *out) {
-    auto &json = *static_cast<Json::Value *>(json_obj_ptr);;
+jsoncpp_benchmarks::print(io_device *out, std::size_t flags) {
     auto *stream = out->output_io<io_type::std_strstreams>();
     auto &ostream = stream->stream();
 
@@ -63,7 +57,7 @@ jsoncpp_benchmarks::print(void *json_obj_ptr, io_device *out) {
 
     std::string err;
     try {
-        writer->write(json, &ostream);
+        writer->write(*local_obj, &ostream);
     } catch (const std::exception &ex) {
         err = ex.what();
     }
@@ -71,9 +65,9 @@ jsoncpp_benchmarks::print(void *json_obj_ptr, io_device *out) {
     return {err.empty(), std::move(err)};
 }
 
-void jsoncpp_benchmarks::free_json_obj(void *json_obj_ptr) const {
-    auto *json = static_cast<Json::Value *>(json_obj_ptr);
-    delete json;
+void jsoncpp_benchmarks::finish() const {
+    delete local_obj;
+    local_obj = nullptr;
 }
 
 //std::vector<test_suite_result> jsoncpp_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)

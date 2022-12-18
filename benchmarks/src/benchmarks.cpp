@@ -4,12 +4,16 @@
 #include <chrono>
 #include <sstream>
 
-#include "tests/jsoncons_tests.hpp"
-#include "tests/cjson_tests.hpp"
-#include "tests/json11_tests.hpp"
-#include "tests/jsoncpp_tests.hpp"
-#include "tests/flatjson_tests.hpp"
+#include "tests/jsoncons.hpp"
+#include "tests/json11.hpp"
+#include "tests/flatjson.hpp"
+#include "tests/yyjson.hpp"
+#include "tests/simdjson.hpp"
+#include "tests/taojson.hpp"
+#include "tests/cjson.hpp"
+#include "tests/jsoncpp.hpp"
 
+// for compare result test
 #include <flatjson/flatjson.hpp>
 
 namespace json_benchmarks {
@@ -20,7 +24,7 @@ using std::chrono::duration;
 /*************************************************************************************************/
 
 std::pair<bool, std::string>
-benchmarks::check(io_device *in, io_device *out) const {
+benchmarks::check(io_device *in, io_device *out, std::size_t flags) const {
     assert(in->type() == io_type::string_buffer || in->type() == io_type::mmap_streams);
     assert(out->type() == io_type::string_buffer || out->type() == io_type::std_strstreams);
 
@@ -81,11 +85,14 @@ benchmarks::allowed_leaks() const { return {0, 0};}
 
 /*************************************************************************************************/
 
-std::pair<std::unique_ptr<io_device>, std::unique_ptr<io_device>>
-benchmarks::create_io(const std::string &input_fname, const std::string &output_fname) const {
+std::pair<
+     std::unique_ptr<io_device>
+    ,std::unique_ptr<io_device>
+>
+benchmarks::create_io(const std::string &input_fname) const {
     return {
          json_benchmarks::create_io(io_direction::input, input_io_type(), input_fname)
-        ,json_benchmarks::create_io(io_direction::output, output_io_type(), output_fname)
+        ,json_benchmarks::create_io(io_direction::output, output_io_type(), "")
     };
 }
 
@@ -111,9 +118,15 @@ benchmarks_list create_benchmarks() {
 
     list.emplace_back(std::make_unique<jsoncons_benchmarks>());
     list.emplace_back(std::make_unique<flatjson_benchmarks>());
-    list.emplace_back(std::make_unique<cjson_benchmarks>());
-    list.emplace_back(std::make_unique<jsoncpp_benchmarks>());
-    list.emplace_back(std::make_unique<json11_benchmarks>());
+    list.emplace_back(std::make_unique<flatjson_benchmarks>());
+    list.emplace_back(std::make_unique<yyjson_benchmarks>());
+    list.emplace_back(std::make_unique<yyjson_benchmarks>());
+    list.emplace_back(std::make_unique<simdjson_benchmarks>());
+    list.emplace_back(std::make_unique<simdjson_benchmarks>());
+//    list.emplace_back(std::make_unique<json11_benchmarks>());
+//    list.emplace_back(std::make_unique<taojson_benchmarks>());
+//    list.emplace_back(std::make_unique<cjson_benchmarks>());
+//    list.emplace_back(std::make_unique<jsoncpp_benchmarks>());
 
     return list;
 }

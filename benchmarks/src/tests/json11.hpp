@@ -7,13 +7,15 @@ namespace json_benchmarks {
 
 /*************************************************************************************************/
 
-struct jsoncpp_benchmarks: benchmarks {
-    virtual ~jsoncpp_benchmarks() = default;
+struct json11_benchmarks: benchmarks {
+    virtual ~json11_benchmarks() = default;
 
-    void*alloc_json_obj(io_device *in) const override;
-    std::pair<bool, std::string> parse(void **json_obj_ptr, io_device *in) override;
-    std::pair<bool, std::string> print(void *json_obj_ptr, io_device *out) override;
-    void free_json_obj(void *json_obj_ptr) const override;
+    void prepare(io_device *in, std::size_t flags) const override;
+    std::pair<bool, std::string> parse(io_device *in, std::size_t flags) override;
+    std::pair<bool, std::string> print(io_device *out, std::size_t flags) override;
+    void finish() const override;
+
+    std::pair<std::size_t, std::size_t> allowed_leaks() const override;
 
 //    test_suite_results run_test_suite(const test_suite_files &pathnames) override;
 
@@ -27,4 +29,4 @@ struct jsoncpp_benchmarks: benchmarks {
 
 /*************************************************************************************************/
 
-} // json_benchmarks
+} // ns json_benchmarks

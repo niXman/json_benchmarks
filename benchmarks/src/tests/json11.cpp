@@ -1,5 +1,5 @@
 
-#include "json11_tests.hpp"
+#include "json11.hpp"
 
 #include <fstream>
 #include <iostream> // TODO:
@@ -23,17 +23,18 @@ const char* json11_benchmarks::notes() const {
     ;
 }
 
-void* json11_benchmarks::alloc_json_obj(io_device *in) const {
-    return new json11::Json;
+static json11::Json *local_obj = nullptr;;
+
+void json11_benchmarks::prepare(io_device *in, std::size_t flags) const {
+    local_obj = new json11::Json;
 }
 
 std::pair<bool, std::string>
-json11_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+json11_benchmarks::parse(io_device *in, std::size_t flags) {
     auto *input  = in->input_io<io_type::string_buffer>();
-    auto *json = static_cast<json11::Json *>(*json_obj_ptr);
 
     std::string err;
-    *json = json11::Json::parse(input->stream(), err);
+    *local_obj = json11::Json::parse(input->stream(), err);
     if (err.length() > 0) {
         return {false, std::move(err)};
     }
@@ -42,20 +43,18 @@ json11_benchmarks::parse(void **json_obj_ptr, io_device *in) {
 }
 
 std::pair<bool, std::string>
-json11_benchmarks::print(void *json_obj_ptr, io_device *out) {
+json11_benchmarks::print(io_device *out, std::size_t flags) {
     auto *output  = out->input_io<io_type::string_buffer>();
-    auto *json = static_cast<json11::Json *>(json_obj_ptr);
     auto &string = output->stream();
 
-    json->dump(string);
+    local_obj->dump(string);
 
     return {true, std::string{}};
 }
 
-void json11_benchmarks::free_json_obj(void *json_obj_ptr) const {
-    auto *json = static_cast<json11::Json *>(json_obj_ptr);
-
-    delete json;
+void json11_benchmarks::finish() const {
+    delete local_obj;
+    local_obj = nullptr;
 }
 
 std::pair<std::size_t, std::size_t>

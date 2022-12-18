@@ -1,42 +1,42 @@
 
-#include "jsoncons_tests.hpp"
+#include "taojson.hpp"
 #include "../stringize.hpp"
 
-#include <jsoncons/json.hpp>
-#include <jsoncons/json_reader.hpp>
+#include <tao/json.hpp>
 
 namespace json_benchmarks {
 
-io_type jsoncons_benchmarks::input_io_type() const { return io_type::mmap_streams; }
-io_type jsoncons_benchmarks::output_io_type() const { return io_type::string_buffer; }
+io_type taojson_benchmarks::input_io_type() const { return io_type::mmap_streams; }
+io_type taojson_benchmarks::output_io_type() const { return io_type::string_buffer; }
 
-const char* jsoncons_benchmarks::name() const { return "jsoncons"; }
+const char* taojson_benchmarks::name() const { return "taojson"; }
 
-const char* jsoncons_benchmarks::url() const { return "https://github.com/danielaparker/jsoncons"; }
+const char* taojson_benchmarks::url() const { return "https://github.com/taocpp/json"; }
 
-const char* jsoncons_benchmarks::version() const {
-    return __STRINGIZE_VERSION(JSONCONS_VERSION_MAJOR, JSONCONS_VERSION_MINOR, JSONCONS_VERSION_PATCH);
+const char* taojson_benchmarks::version() const {
+    return "unknown";
 }
 
-const char* jsoncons_benchmarks::notes() const {
-    return "Uses sorted `std::vector` of key/value pairs for objects, expect smaller memory footprint."
-           "Uses slightly modified [grisu3_59_56 implementation by Florian Loitsch](https://florian.loitsch.com/publications) "
-           "plus fallback for printing doubles, expect faster serializing."
+const char* taojson_benchmarks::notes() const {
+    return
+        ""
     ;
 }
 
-void* jsoncons_benchmarks::alloc_json_obj(io_device *in) const {
-    return new jsoncons::json;
+static tao::json::value *local_obj = nullptr;
+
+void taojson_benchmarks::prepare(io_device *in, std::size_t flags) const {
+    local_obj = new tao::json::value;
 }
 
 std::pair<bool, std::string>
-jsoncons_benchmarks::parse(void **json_obj_ptr, io_device *in) {
+taojson_benchmarks::parse(io_device *in, std::size_t flags) {
     auto *input  = in->input_io<io_type::mmap_streams>();
     auto pair = input->stream();
 
     std::string err;
     try {
-        *static_cast<jsoncons::json *>(*json_obj_ptr) = jsoncons::json::parse(pair.first, pair.second);
+        *local_obj = tao::json::from_string(pair.first, pair.second);
     } catch (const std::exception &ex) {
         err = ex.what();
     }
@@ -49,14 +49,13 @@ jsoncons_benchmarks::parse(void **json_obj_ptr, io_device *in) {
 }
 
 std::pair<bool, std::string>
-jsoncons_benchmarks::print(void *json_obj_ptr, io_device *out) {
-    auto *json = static_cast<jsoncons::json *>(json_obj_ptr);
+taojson_benchmarks::print(io_device *out, std::size_t flags) {
     auto *output = out->output_io<io_type::string_buffer>();
     auto &string = output->stream();
 
     std::string err;
     try {
-        json->dump(string);
+        string = tao::json::to_string(*local_obj);
     } catch (const std::exception &ex) {
         err = ex.what();
     }
@@ -64,41 +63,41 @@ jsoncons_benchmarks::print(void *json_obj_ptr, io_device *out) {
     return {err.empty(), std::move(err)};
 }
 
-void jsoncons_benchmarks::free_json_obj(void *json_obj_ptr) const {
-    auto *json = static_cast<jsoncons::json *>(json_obj_ptr);
-    delete json;
+void taojson_benchmarks::finish() const {
+    delete local_obj;
+    local_obj = nullptr;
 }
 
 #if 0
-const std::string& jsoncons_benchmarks::name() const
+const std::string& taojson_benchmarks::name() const
 {
     static const std::string s = "jsoncons";
 
     return s;
 }
 
-const std::string& jsoncons_benchmarks::url() const
+const std::string& taojson_benchmarks::url() const
 {
     static const std::string s = "https://github.com/danielaparker/jsoncons";
 
     return s;
 }
 
-const std::string& jsoncons_benchmarks::version() const
+const std::string& taojson_benchmarks::version() const
 {
     static const std::string s = __STRINGIZE_VERSION(JSONCONS_VERSION_MAJOR, JSONCONS_VERSION_MINOR, JSONCONS_VERSION_PATCH);
 
     return s;
 }
 
-const std::string& jsoncons_benchmarks::notes() const
+const std::string& taojson_benchmarks::notes() const
 {
     static const std::string s = "Uses sorted `std::vector` of key/value pairs for objects, expect smaller memory footprint.Uses slightly modified [grisu3_59_56 implementation by Florian Loitsch](https://florian.loitsch.com/publications) plus fallback for printing doubles, expect faster serializing.";
 
     return s;
 }
 
-measurements jsoncons_benchmarks::measure_small(const std::string& input, std::string& output)
+measurements taojson_benchmarks::measure_small(const std::string& input, std::string& output)
 {
     size_t start_memory_used;
     size_t end_memory_used;
@@ -133,7 +132,7 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
         }
     }
     size_t final_memory_used = get_process_memory();
-    
+
     measurements results;
     results.library_name = name();
     results.memory_used = end_memory_used > start_memory_used ? end_memory_used - start_memory_used : 0;
@@ -142,7 +141,7 @@ measurements jsoncons_benchmarks::measure_small(const std::string& input, std::s
     return results;
 }
 
-measurements jsoncons_benchmarks::measure_big(const char *input_filename, const char* output_filename)
+measurements taojson_benchmarks::measure_big(const char *input_filename, const char* output_filename)
 {
     //std::cout << "jsoncons output_filename: " << output_filename << "\n";
     size_t start_memory_used;
@@ -185,7 +184,7 @@ measurements jsoncons_benchmarks::measure_big(const char *input_filename, const 
         }
     }
     size_t final_memory_used = get_process_memory();
-    
+
     measurements results;
     results.library_name = name();
     results.memory_used = end_memory_used - start_memory_used;
@@ -194,7 +193,7 @@ measurements jsoncons_benchmarks::measure_big(const char *input_filename, const 
     return results;
 }
 
-std::vector<test_suite_result> jsoncons_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
+std::vector<test_suite_result> taojson_benchmarks::run_test_suite(std::vector<test_suite_file>& pathnames)
 {
     std::vector<test_suite_result> results;
     for (auto& file : pathnames)

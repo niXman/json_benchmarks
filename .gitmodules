@@ -31,3 +31,12 @@
 [submodule "thirdparty/flatjson"]
 	path = thirdparty/flatjson
 	url = https://github.com/niXman/flatjson.git
+[submodule "thirdparty/cmdargs"]
+	path = thirdparty/cmdargs
+	url = https://github.com/niXman/cmdargs.git
+[submodule "thirdparty/yyjson"]
+	path = thirdparty/yyjson
+	url = https://github.com/ibireme/yyjson.git
+[submodule "thirdparty/simdjson"]
+	path = thirdparty/simdjson
+	url = https://github.com/simdjson/simdjson.git

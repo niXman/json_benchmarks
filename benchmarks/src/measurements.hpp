@@ -44,6 +44,29 @@ void json_file_finder(const char* dir_name, F f)
     }
 }
 
+/*************************************************************************************************/
+
+inline std::string human_size(std::uint64_t bytes) {
+    static const char *suffix[] = {"B", "KB", "MB", "GB", "TB"};
+    static const int length = sizeof(suffix) / sizeof(suffix[0]);
+
+    int i = 0;
+    double dblBytes = bytes;
+
+    if ( bytes > 1024 ) {
+        for ( i = 0; (bytes / 1024) > 0 && i<length-1; i++, bytes /= 1024 ) {
+            dblBytes = bytes / 1024.0;
+        }
+    }
+
+    char output[200];
+    std::snprintf(output, sizeof(output), "%.02lf %s", dblBytes, suffix[i]);
+
+    return output;
+}
+
+/*************************************************************************************************/
+
 struct measurements {
     std::string name;
     std::string errmsg;
@@ -83,38 +106,21 @@ struct measurements {
         ,time_to_free{}
     {}
 
-    static std::string humanSize(std::uint64_t bytes) {
-        static const char *suffix[] = {"B", "KB", "MB", "GB", "TB"};
-        static const int length = sizeof(suffix) / sizeof(suffix[0]);
-
-        int i = 0;
-        double dblBytes = bytes;
-
-        if ( bytes > 1024 ) {
-            for ( i = 0; (bytes / 1024) > 0 && i<length-1; i++, bytes /= 1024 ) {
-                dblBytes = bytes / 1024.0;
-            }
-        }
-
-        char output[200];
-        std::snprintf(output, sizeof(output), "%.02lf %s", dblBytes, suffix[i]);
-
-        return output;
-    }
-
     friend std::ostream& operator<< (std::ostream &os, const measurements &m) {
         os
             << "    errmsg: " << (m.errmsg.empty() ? "nope" : m.errmsg.c_str()) << std::endl
-            << "    prepare time: " << m.time_to_prepare/1000.0 << ", allocated : " << humanSize(m.prepare_allocated) << ", allocs: " << m.prepare_allocations << ", deallocs: " << m.prepare_deallocations << std::endl
-            << "    parse   time: " << m.time_to_parse/1000.0 << ", allocated : " << humanSize(m.parse_allocated) << ", allocs: " << m.parse_allocations << ", deallocs: " << m.parse_deallocations << std::endl
-            << "    print   time: " << m.time_to_print/1000.0 << ", allocated : " << humanSize(m.print_allocated) << ", allocs: " << m.print_allocations << ", deallocs: " << m.print_deallocations << std::endl
-            << "    free    time: " << m.time_to_free/1000.0 << ", deallocated: " << humanSize(m.free_deallocated) << ", deallocs: " << m.free_deallocations << std::endl
+            << "    prepare time: " << m.time_to_prepare/1000.0 << ", allocated : " << human_size(m.prepare_allocated) << ", allocs: " << m.prepare_allocations << ", deallocs: " << m.prepare_deallocations << std::endl
+            << "    parse   time: " << m.time_to_parse/1000.0 << ", allocated : " << human_size(m.parse_allocated) << ", allocs: " << m.parse_allocations << ", deallocs: " << m.parse_deallocations << std::endl
+            << "    print   time: " << m.time_to_print/1000.0 << ", allocated : " << human_size(m.print_allocated) << ", allocs: " << m.print_allocations << ", deallocs: " << m.print_deallocations << std::endl
+            << "    free    time: " << m.time_to_free/1000.0 << ", deallocated: " << human_size(m.free_deallocated) << ", deallocs: " << m.free_deallocations << std::endl
             << "    leaked bytes: " << m.free_leaked_bytes << ", leaked allocs: " << m.free_leaked_allocations << std::flush;
         ;
 
         return os;
     }
 };
+
+/*************************************************************************************************/
 
 enum class result_code
 {
@@ -175,6 +181,8 @@ size_t count_results(const std::vector<test_suite_result>& results,
     }
     return count;
 }
+
+/*************************************************************************************************/
 
 } // namespace json_benchmarks
 
